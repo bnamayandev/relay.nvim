@@ -1,0 +1,255 @@
+*relay.txt*  Send code from Neovim to Claude Code sessions
+
+==============================================================================
+CONTENTS                                                       *relay-contents*
+
+  1. Introduction ........................................ |relay-intro|
+  2. Setup ............................................... |relay-setup|
+     Menu ................................................ |relay-menu|
+  3. Overlay ............................................. |relay-overlay|
+  4. Queue ............................................... |relay-queue|
+  5. Sessions ............................................ |relay-sessions|
+  6. Commands ............................................ |relay-commands|
+  7. Lua API ............................................. |relay-api|
+  8. Highlights .......................................... |relay-highlights|
+
+==============================================================================
+1. INTRODUCTION                                                   *relay-intro*
+
+relay.nvim pastes code into the prompt of a running Claude Code session.
+Press <leader>aq on a selection (or a line) for a menu: add it to the queue,
+add it with context, send it to your agent, send the whole queue, or view the
+queue. Sends ask for an optional prompt, which goes at the top.
+
+Saved code is sent as a Claude Code mention, `@path#L10-20`, so Claude reads
+exactly those lines. Code that only exists in Neovim (unsaved changes, buffers
+without a file, code deleted after it was queued) is sent inline in a fenced
+block. See |relay-format|.
+
+Sessions are looked up live on every send (nothing polls in the background).
+They can run in a Neovim |terminal| (this or another instance), tmux, zellij
+(0.44+, or older when the Claude pane is focused), kitty with remote control,
+or WezTerm. Sessions that can't be typed into are still listed; choosing one
+copies the message to the clipboard.
+
+Requires Neovim 0.10+. Linux has full support; elsewhere sessions in Neovim
+terminals, tmux and WezTerm work.
+
+==============================================================================
+2. SETUP                                                          *relay-setup*
+
+With lazy.nvim: >lua
+    { dir = "~/projects/relay.nvim", opts = {} }
+<
+Defaults: >lua
+    require("relay").setup({
+      keymaps = {
+        menu = "<leader>aq",     -- normal + visual: action menu
+        open = "<leader>aa",     -- visual: overlay
+        add = false,             -- visual: queue the selection directly
+        queue = false,           -- normal: open the queue directly
+        send = "<leader>as",     -- normal: send the queue
+        file = "<leader>af",     -- normal: queue the current file
+        note = "<leader>an",     -- normal: context of the snippet under cursor
+        clear = "<leader>ax",    -- normal: clear the queue
+        target = "<leader>at",   -- normal: pin / unpin a session
+        sessions = "<leader>aj", -- normal: jump to a session
+      },
+      format = "auto",
+      submit = false,
+      focus = "auto",
+      clear_on_send = true,
+      diagnostics = false,
+      clipboard_fallback = true,
+      submit_delay = 80,
+      claude_dir = nil,
+      backends = { nvim = true, tmux = true, zellij = true, kitty = true,
+                   wezterm = true },
+      signs = true,
+      virtual_text = true,
+      ui = { border = "rounded", width = 0.6, max_preview = 15, icon = "󰚩" },
+    })
+<
+                                                              *relay-keymaps*
+keymaps         Table of keys, or `false` for none. Set a single entry to
+                `false` to skip it.
+
+                                                               *relay-format*
+format          "ref": `@path#L10-20` mention. "inline": the code in a fenced
+                block. "auto": ref when the file is saved on disk, inline
+                otherwise. Can be overridden per snippet.
+
+submit          Press Enter in Claude after pasting.
+
+focus           Switch to the Claude pane/window after sending. "auto" does
+                so only when not submitting (you'll want to continue typing
+                there).
+
+clear_on_send   Empty the queue after it was delivered. |:Relay| restore
+                brings it back.
+
+diagnostics     Include LSP diagnostics of the snippet's lines by default.
+
+clipboard_fallback
+                Copy the message when it can't be delivered.
+
+submit_delay    Milliseconds between the paste and Enter.
+
+claude_dir      Claude Code's config directory (for the session registry).
+                Defaults to $CLAUDE_CONFIG_DIR or ~/.claude.
+
+backends        Turn off support for a terminal. Its sessions are then listed
+                as clipboard-only.
+
+signs, virtual_text
+                Mark queued code in the sign column / after its first line.
+
+==============================================================================
+MENU                                                               *relay-menu*
+
+<leader>aq opens a menu at the cursor for the visual selection, or for the
+cursor line in normal mode (`:Relay` does the same):
+
+  a             add to the queue
+  c             add with context (edit the context when already queued)
+  s             send just this to the agent; asks for an optional prompt
+  S             send the whole queue; asks for an optional prompt
+  v             view the queue (delete with x)
+
+Also 1-5, or j/k and <CR>. A snippet's context is sent in front of it as
+"context: @path#L10". The prompt goes before everything else; leave it empty
+to send without one.
+
+==============================================================================
+3. OVERLAY                                                      *relay-overlay*
+
+Opened from visual mode with <leader>aa (or `:'<,'>Relay`). Shows the
+selection and a note box in insert mode.
+
+  <CR>          send this snippet with its context
+  <C-s>         send and press Enter in Claude
+  <Tab>         add to the queue
+  <C-a>         add to the queue, then send the whole queue
+  <C-t>         send, choosing the session (ignores a pinned one)
+  <C-f>         toggle @mention / inline code
+  <C-d>         toggle LSP diagnostics
+  <C-e> <C-y>   scroll the preview
+  <C-j>         new line in the context (insert mode)
+  <C-c>         close; in normal mode also <Esc> and q
+
+==============================================================================
+4. QUEUE                                                          *relay-queue*
+
+Queued snippets are tracked with extmarks: their line numbers follow your
+edits. When the file is reloaded from disk (e.g. Claude changed it and
+'autoread' picked it up), each snippet is found again by its content. If only
+its first and last lines survived it is marked "edited outside"; if it's gone
+it is marked "gone from file" and sent inline with the text you queued.
+
+Queuing the same lines again updates the existing entry.
+
+Keys in the queue window (<leader>aq in normal mode, or `:Relay`):
+
+  s             send the queue
+  S             send, choosing the session
+  m             write a prompt (goes first), then send the queue
+  e i a         edit the snippet's context
+  x dd          delete the snippet
+  u             restore the last deleted snippet(s)
+  K J           move up / down
+  f             cycle format: auto -> ref -> inline
+  D             toggle LSP diagnostics
+  p             preview the exact message
+  <CR> o        jump to the snippet
+  C             clear the queue
+  t             pin a session
+  ?             list these keys
+  q <Esc>       close
+
+==============================================================================
+5. SESSIONS                                                    *relay-sessions*
+
+On send, Relay reads Claude Code's session registry (~/.claude/sessions) and
+scans the process table for `claude` processes. For each session it finds the
+program that owns its terminal: the first ancestor process attached to a
+different tty. A session in tmux inside zellij is therefore reached through
+tmux, never through the outer layers.
+
+With one session it is used directly. With several, a |vim.ui.select()|
+picker lists them: the last used and those working on the current project
+first. Pin one with <leader>at to skip the picker until it exits.
+
+Text arrives as a bracketed paste with control characters removed. Claude
+shows a multi-line paste as "[Pasted text #1 +N lines]" and resolves the
+mentions inside it on submit.
+
+zellij older than 0.44 can only type into the focused pane, so a session there
+is reachable only while its pane is focused (e.g. its own zellij session).
+Otherwise the message goes to the clipboard.
+
+kitty needs `allow_remote_control` and `listen_on` in kitty.conf.
+
+==============================================================================
+6. COMMANDS                                                    *relay-commands*
+
+                                                                       *:Relay*
+:Relay                  Action menu for the cursor line.
+:{range}Relay           Action menu for the lines.
+:Relay menu             Same.
+:{range}Relay open      Same.
+:{range}Relay add [context]
+                        Queue the lines (with context).
+:Relay file [context]   Queue the current file as a whole.
+:Relay send [prompt]    Send the queue, with an optional prompt first.
+:Relay send! [prompt]   Same, but always choose the session.
+:Relay queue            Open the queue.
+:Relay clear            Clear the queue.
+:Relay restore          Restore the last removed snippet(s).
+:Relay preview          Show the message the queue would produce.
+:Relay note             Edit the context of the snippet under the cursor.
+:Relay target           Pin a session.
+:Relay target clear     Unpin.
+:Relay sessions         Jump to a running session.
+
+==============================================================================
+7. LUA API                                                          *relay-api*
+
+  require("relay").menu()           action menu (selection or cursor line)
+  require("relay").open()           overlay for the visual selection
+  require("relay").add()            queue the visual selection
+  require("relay").add_file()       queue the current file
+  require("relay").send(opts)       send the queue; opts: `message` (prompt),
+                                    `pick`,
+                                    `submit`, `focus`, `items`
+  require("relay").queue()          open the queue window
+  require("relay").clear()          clear the queue
+  require("relay").restore()        restore removed snippets
+  require("relay").target()         pin a session
+  require("relay").unpin()          unpin
+  require("relay").sessions()       jump to a session
+  require("relay").note()           context of the snippet under the cursor
+  require("relay").preview()        preview the message
+  require("relay").items()          the queued snippets
+  require("relay").count()          number of queued snippets
+  require("relay").statusline()     "󰚩 3 → session" or ""
+
+                                                        *RelayQueueChanged*
+The `User RelayQueueChanged` autocmd fires when the queue or the pinned
+session changes.
+
+==============================================================================
+8. HIGHLIGHTS                                                *relay-highlights*
+
+  RelayTitle      float titles                 (FloatTitle)
+  RelayFooter     float footers                (FloatFooter)
+  RelayKey        keys in hints                (Special)
+  RelayMuted      secondary text               (Comment)
+  RelayIndex      queue numbers                (Number)
+  RelayPath       file locations               (Directory)
+  RelayMode       ref / inline                 (Type)
+  RelayNote       contexts                     (String)
+  RelayWarn       snippets gone from the file  (DiagnosticWarn)
+  RelaySign       sign of queued code          (DiagnosticInfo)
+  RelayVirtText   "#n context" after queued    (Comment)
+
+ vim:tw=78:ts=8:ft=help:norl:
