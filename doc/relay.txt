@@ -50,7 +50,7 @@ Defaults: >lua
         queue = false,           -- normal: open the queue directly
         send = "<leader>as",     -- normal: send the queue
         file = "<leader>af",     -- normal: queue the current file
-        note = "<leader>an",     -- normal: context of the snippet under cursor
+        note = "<leader>an",     -- normal: context of snippet under cursor
         clear = "<leader>ax",    -- normal: clear the queue
         target = "<leader>at",   -- normal: pin / unpin a session
         sessions = "<leader>aj", -- normal: jump to a session
@@ -111,11 +111,11 @@ MENU                                                               *relay-menu*
 <leader>aq opens a menu at the cursor for the visual selection, or for the
 cursor line in normal mode (`:Relay` does the same):
 
-  a             add to the queue
-  c             add with context (edit the context when already queued)
-  s             send just this to the agent; asks for an optional prompt
-  S             send the whole queue; asks for an optional prompt
-  v             view the queue (delete with x)
+  a  Add to queue
+  c  Add with context   (Edit context when it's already queued)
+  s  Send line          or Send selection: just this, after an optional prompt
+  S  Send queue (n)     the whole queue, after an optional prompt
+  v  View queue (n)     delete entries with x
 
 Also 1-5, or j/k and <CR>. A snippet's context is sent in front of it as
 "context: @path#L10". The prompt goes before everything else; leave it empty

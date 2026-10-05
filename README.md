@@ -57,11 +57,11 @@ Default keymaps (all under `<leader>a`, change or disable them in `opts.keymaps`
 
 | Key | Action |
 | --- | --- |
-| `a` | add to the queue |
-| `c` | add with context (or edit the context if it's already queued) |
-| `s` | send just this to your agent — asks for an optional prompt first |
-| `S` | send the whole queue — asks for an optional prompt first |
-| `v` | view the queue (delete entries with `x`) |
+| `a` | **Add to queue** |
+| `c` | **Add with context** (**Edit context** if it's already queued) |
+| `s` | **Send line** / **Send selection**: just this, to your agent — asks for an optional prompt first |
+| `S` | **Send queue (n)**: the whole queue — asks for an optional prompt first |
+| `v` | **View queue (n)** — delete entries with `x` |
 
 Also `1`–`5`, or move with `j`/`k` and press `⏎`. In the prompt box `⏎` sends; leave it empty to send without a prompt.
 

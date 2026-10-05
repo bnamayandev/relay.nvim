@@ -152,7 +152,6 @@ function M.menu(range)
       {
         key = "a",
         label = "Add to queue",
-        detail = existing and ("already #" .. index) or nil,
         action = function()
           local i, existed = queue.add(data)
           queued(i, data, existed)
@@ -160,7 +159,7 @@ function M.menu(range)
       },
       {
         key = "c",
-        label = existing and "Edit context…" or "Add with context…",
+        label = existing and "Edit context" or "Add with context",
         action = function()
           input.open({
             title = "Context for " .. what .. " (sent as \"context: code\")",
@@ -183,8 +182,7 @@ function M.menu(range)
       },
       {
         key = "s",
-        label = "Send this to agent…",
-        detail = what,
+        label = data.srow == data.erow and "Send line" or "Send selection",
         action = function()
           with_prompt(function(prompt)
             local item = vim.deepcopy(data)
@@ -197,8 +195,7 @@ function M.menu(range)
       },
       {
         key = "S",
-        label = "Send queue to agent…",
-        detail = count > 0 and util.plural(count, "snippet") or nil,
+        label = ("Send queue (%d)"):format(count),
         disabled = count == 0 and "The queue is empty" or nil,
         action = function()
           with_prompt(function(prompt)
@@ -208,8 +205,7 @@ function M.menu(range)
       },
       {
         key = "v",
-        label = "View queue",
-        detail = count > 0 and util.plural(count, "snippet") or "empty",
+        label = ("View queue (%d)"):format(count),
         action = M.queue,
       },
     },
