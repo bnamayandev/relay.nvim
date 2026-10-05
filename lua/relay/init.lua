@@ -1,4 +1,4 @@
--- relay.nvim: send code from Neovim to Claude Code sessions.
+-- relay.nvim: send code from Neovim to Claude Code, Codex and Copilot sessions.
 local M = {}
 
 local initialized = false
@@ -84,7 +84,7 @@ local function set_keymaps()
     end
   end
   map({ "n", "x" }, keymaps.menu, M.menu, "actions for the selection / line")
-  map("x", keymaps.open, M.open, "send selection to Claude")
+  map("x", keymaps.open, M.open, "send selection to an agent")
   map("x", keymaps.add, M.add, "add selection to the queue")
   map("n", keymaps.queue, M.queue, "open the queue")
   map("n", keymaps.send, M.send, "send the queue")
@@ -92,7 +92,7 @@ local function set_keymaps()
   map("n", keymaps.note, M.note, "edit the context of the snippet under the cursor")
   map("n", keymaps.clear, M.clear, "clear the queue")
   map("n", keymaps.target, M.target, "pin the target session")
-  map("n", keymaps.sessions, M.sessions, "jump to a Claude session")
+  map("n", keymaps.sessions, M.sessions, "jump to an agent session")
 end
 
 ---@param opts? relay.Config|table
@@ -140,7 +140,7 @@ function M.menu(range)
   -- an optional prompt that goes at the top of the message
   local function with_prompt(fn)
     input.open({
-      title = "Prompt for Claude (optional, goes first)",
+      title = "Prompt (optional, goes first)",
       submit_label = "send",
       on_submit = fn,
     })
@@ -296,7 +296,7 @@ function M.unpin()
   require("relay.util").info("Unpinned: sends will ask which session to use")
 end
 
---- Pick a running Claude Code session and switch to it.
+--- Pick a running agent session and switch to it.
 function M.sessions()
   init()
   require("relay.send").jump()

@@ -1,4 +1,4 @@
--- Builds the message Claude receives:
+-- Builds the message the agent receives (the same for Claude Code, Codex and Copilot):
 --
 --   <prompt>
 --
@@ -7,7 +7,7 @@
 --   @other/file.lua#L3
 --
 -- A saved file is referenced with Claude Code's mention syntax, `@path#L10-20`, which makes
--- Claude read exactly those lines from disk. Code that only exists in Neovim (unsaved
+-- the agent read exactly those lines from disk. Code that only exists in Neovim (unsaved
 -- changes, buffers without a file, code deleted since it was queued) is inlined in a fence.
 local config = require("relay.config")
 local util = require("relay.util")

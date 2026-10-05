@@ -14,7 +14,7 @@ end, {
   nargs = "*",
   range = true,
   bang = true,
-  desc = "Relay: send code to Claude Code",
+  desc = "Relay: send code to Claude Code, Codex or Copilot",
   complete = function(arg_lead, cmdline)
     return require("relay.commands").complete(arg_lead, cmdline)
   end,

@@ -30,7 +30,7 @@ local HELP = {
   { "K / J", "move the snippet up / down" },
   { "f", "cycle format: auto → ref → inline" },
   { "D", "include / exclude LSP diagnostics" },
-  { "p", "preview the message Claude will get" },
+  { "p", "preview the message the agent will get" },
   { "⏎ / o", "jump to the snippet" },
   { "C", "clear the queue" },
   { "t", "pin the session sends go to" },
@@ -309,7 +309,7 @@ local function send(opts)
   require("relay.send").send(opts)
 end
 
---- Float showing exactly what Claude will receive.
+--- Float showing exactly what the agent will receive.
 ---@param items relay.Item[]
 ---@param on_close? fun()
 function M.preview_message(items, on_close)
@@ -509,7 +509,7 @@ function M.open()
     end
     view.suspended = true
     require("relay.ui.input").open({
-      title = "Prompt for Claude (goes first)",
+      title = "Prompt (goes first)",
       submit_label = "send",
       on_submit = function(text)
         M.close()

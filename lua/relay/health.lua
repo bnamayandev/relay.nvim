@@ -4,6 +4,8 @@ function M.check()
   local health = vim.health
   local util = require("relay.util")
   local sessions = require("relay.sessions")
+  local agents = require("relay.agents")
+  local config = require("relay.config")
 
   health.start("relay.nvim")
   if vim.fn.has("nvim-0.10") == 1 then
@@ -12,10 +14,21 @@ function M.check()
     health.error("Neovim 0.10 or newer is required")
   end
 
-  if vim.fn.executable("claude") == 1 then
-    health.ok("`claude` found: " .. vim.fn.exepath("claude"))
+  if util.is_linux then
+    health.ok("Process info from /proc (no subprocess per lookup)")
   else
-    health.warn("`claude` is not on PATH (only needed to start sessions; sending works without it)")
+    health.info("Not on Linux: sessions in zellij, kitty and remote Neovims can't be located; tmux, wezterm and Neovim terminals work")
+  end
+
+  health.start("relay.nvim: agents")
+  for _, a in ipairs(agents.list) do
+    if config.options.agents[a.id] == false then
+      health.info(a.label .. ": disabled in `agents`")
+    elseif vim.fn.executable(a.id) == 1 then
+      health.ok(("%s: `%s` found: %s"):format(a.label, a.id, vim.fn.exepath(a.id)))
+    else
+      health.info(("%s: `%s` is not on PATH (only needed to start sessions)"):format(a.label, a.id))
+    end
   end
 
   local registry = vim.fs.joinpath(sessions.claude_dir(), "sessions")
@@ -23,12 +36,6 @@ function M.check()
     health.ok("Claude Code session registry: " .. registry)
   else
     health.info("No session registry at " .. registry .. " (older Claude Code; processes are scanned instead)")
-  end
-
-  if util.is_linux then
-    health.ok("Process info from /proc (no subprocess per lookup)")
-  else
-    health.info("Not on Linux: sessions in zellij, kitty and remote Neovims can't be located; tmux, wezterm and Neovim terminals work")
   end
 
   health.start("relay.nvim: terminals")
@@ -46,7 +53,7 @@ function M.check()
       health.ok(
         version
           .. ": older zellij can only type into the focused pane, so Relay briefly moves focus to the"
-          .. " Claude pane (0.44+ pastes without moving focus)"
+          .. " agent's pane (0.44+ pastes without moving focus)"
       )
     end
   else
@@ -79,7 +86,7 @@ function M.check()
     return
   end
   if #list == 0 then
-    health.info("No running Claude Code sessions")
+    health.info("No running agent sessions")
   end
   for _, s in ipairs(list) do
     if s.reachable then

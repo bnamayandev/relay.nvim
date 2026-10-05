@@ -12,6 +12,7 @@ local M = {}
 ---@field start string|nil start time in clock ticks since boot (Linux)
 ---@field args string|nil  full command line (non-Linux)
 ---@field argv string[]|nil
+---@field agent relay.Agent|false|nil cached by relay.agents.detect
 
 --- Linux tty_nr (from /proc/<pid>/stat) to a comparable terminal name.
 ---@param nr string|integer|nil

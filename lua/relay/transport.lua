@@ -1,7 +1,8 @@
--- Delivers text into a session's prompt. Text is always sent as a bracketed paste, so Claude
--- Code inserts it literally (no slash commands, no @ autocomplete, newlines don't submit).
+-- Delivers text into a session's prompt. Text is always sent as a bracketed paste, so the
+-- agent inserts it literally (no slash commands, no @ autocomplete, newlines don't submit).
 local util = require("relay.util")
 local config = require("relay.config")
+local agents = require("relay.agents")
 
 local M = {}
 
@@ -298,7 +299,7 @@ backends.zellij = {
           end
           local function finish()
             if opts.focus then
-              return cb(true) -- stay in the Claude pane
+              return cb(true) -- stay in the agent's pane
             end
             restore(function()
               cb(true)
@@ -404,6 +405,10 @@ function M.send(s, text, opts, cb)
     return cb(false, s.reason or "no way to reach this session")
   end
   text = M.sanitize(text)
+  local agent = agents.by_id[s.agent]
+  if agent and agent.paste_suffix and text:find("%S$") then
+    text = text .. agent.paste_suffix
+  end
   backend.send(s, text, function(ok, err)
     if not ok then
       return cb(false, err)

@@ -1,14 +1,16 @@
--- Discovers running Claude Code sessions and how to reach each one.
+-- Discovers running agent sessions (Claude Code, Codex, Copilot) and how to reach each one.
 --
 -- Discovery runs on demand only (nothing polls in the background), so it is always as fresh
 -- as the moment you send. Sources:
 --   * Claude Code's own live registry (~/.claude/sessions/<pid>.json): name, cwd, busy/idle
---   * the process table: finds sessions of older Claude versions and, for every session, the
---     program that owns its terminal (Neovim, tmux, zellij, kitty, wezterm)
+--   * the process table: finds Codex and Copilot sessions, sessions of older Claude versions
+--     and, for every session, the program that owns its terminal (Neovim, tmux, zellij, kitty,
+--     wezterm)
 -- On Linux this is a /proc scan (a few ms, no subprocess). The only subprocesses are one
 -- `tmux list-panes` per tmux server (and similar) when such sessions exist.
 local util = require("relay.util")
 local proc = require("relay.proc")
+local agents = require("relay.agents")
 local config = require("relay.config")
 local state = require("relay.state")
 
@@ -16,6 +18,7 @@ local M = {}
 
 ---@class relay.Session
 ---@field pid integer
+---@field agent string            claude | codex | copilot
 ---@field start string|nil
 ---@field tty string
 ---@field name string|nil
@@ -42,20 +45,6 @@ local HOSTS = {
   ["wezterm-gui"] = "wezterm",
   ["wezterm-mux-server"] = "wezterm",
   ["wezterm-mux-ser"] = "wezterm", -- Linux truncates process names to 15 bytes
-}
-
--- `claude <subcommand>` invocations that have no interactive prompt
-local NON_INTERACTIVE = {
-  mcp = true,
-  config = true,
-  doctor = true,
-  update = true,
-  upgrade = true,
-  install = true,
-  plugin = true,
-  plugins = true,
-  ["migrate-installer"] = true,
-  ["setup-token"] = true,
 }
 
 local STATUS_ICON = { busy = "●", idle = "○", waiting = "◐", blocked = "◐", stopped = "■", done = "✓" }
@@ -103,34 +92,8 @@ local function read_registry(procs)
   return entries, seen
 end
 
-local function is_claude_name(name)
-  return name == "claude" or name == "claude.exe"
-end
-
----@param p relay.Proc
-local function is_claude(p)
-  if not (is_claude_name(p.comm) or p.comm == "node" or p.comm == "bun") then
-    return false
-  end
-  local argv = proc.argv(p)
-  if #argv == 0 then
-    return false
-  end
-  local first = 2
-  if not is_claude_name(vim.fs.basename(argv[1])) then
-    -- `node .../@anthropic-ai/claude-code/cli.js`
-    local script = argv[2] or ""
-    if not (is_claude_name(vim.fs.basename(script)) or script:find("claude-code", 1, true)) then
-      return false
-    end
-    first = 3
-  end
-  for i = first, #argv do
-    if argv[i] == "-p" or argv[i] == "--print" then
-      return false
-    end
-  end
-  return not (argv[first] and NON_INTERACTIVE[argv[first]])
+local function enabled(agent)
+  return config.options.agents[agent] ~= false
 end
 
 --- The program that owns a session's terminal is the first ancestor that is not attached to
@@ -152,14 +115,15 @@ local function terminal_owner(p, procs)
   return nil, child
 end
 
---- A claude process started by another claude on the same terminal is not a session.
+--- An agent started by another agent on the same terminal is not a session: the native
+--- binary behind an npm wrapper (codex, copilot), or e.g. `codex` run by Claude's Bash tool.
 local function is_nested(p, owner, procs)
   local cur = procs[p.ppid or -1]
   for _ = 1, 64 do
     if not cur or cur == owner then
       return false
     end
-    if is_claude_name(cur.comm) then
+    if agents.detect(cur) then
       return true
     end
     cur = procs[cur.ppid or -1]
@@ -371,9 +335,10 @@ function resolvers.wezterm(s, p, owner, _, jobs)
 end
 
 ---@return relay.Session
-local function build(p, procs, reg, owner, child, jobs)
+local function build(p, agent, reg, owner, child, jobs)
   local s = {
     pid = p.pid,
+    agent = agent,
     start = p.start,
     tty = p.tty,
     name = reg and str(reg.name),
@@ -434,24 +399,28 @@ function M.sort(list)
   end)
 end
 
---- Find all running Claude Code sessions. `cb(list)` runs on the main loop.
+--- Find all running agent sessions. `cb(list)` runs on the main loop.
 ---@param cb fun(list: relay.Session[])
 function M.discover(cb)
   proc.snapshot(function(procs)
-    local registry, seen = read_registry(procs)
+    local registry, seen = {}, {}
+    if enabled("claude") then
+      registry, seen = read_registry(procs)
+    end
     local jobs, list = {}, {}
     for pid, data in pairs(registry) do
       local p = procs[pid]
       if p.tty then
         local owner, child = terminal_owner(p, procs)
-        list[#list + 1] = build(p, procs, data, owner, child, jobs)
+        list[#list + 1] = build(p, "claude", data, owner, child, jobs)
       end
     end
     for pid, p in pairs(procs) do
-      if not seen[pid] and p.tty and is_claude(p) then
+      local agent = not seen[pid] and p.tty and agents.detect(p)
+      if agent and enabled(agent.id) then
         local owner, child = terminal_owner(p, procs)
         if not is_nested(p, owner, procs) then
-          list[#list + 1] = build(p, procs, nil, owner, child, jobs)
+          list[#list + 1] = build(p, agent.id, nil, owner, child, jobs)
         end
       end
     end
@@ -471,22 +440,28 @@ function M.discover(cb)
   end)
 end
 
+local function display_name(s)
+  return s.name or (s.cwd and vim.fs.basename(s.cwd)) or tostring(s.pid)
+end
+
+--- "claude api-refactor", "codex relay.nvim"
 ---@param s relay.Session
 function M.short(s)
-  return s.name or (s.cwd and vim.fs.basename(s.cwd)) or ("claude " .. s.pid)
+  return s.agent .. " " .. display_name(s)
 end
 
 --- One line for pickers, most telling parts first:
---- "○ idle  api-refactor [feat/x]  tmux main:1.0  ~/code/api-wt"
+--- "○ claude idle  api-refactor [feat/x]  tmux main:1.0  ~/code/api-wt"
 ---@param s relay.Session
 function M.label(s)
-  local status = s.status or "live"
-  if s.waiting_for then
-    status = status .. ":" .. s.waiting_for
+  -- Codex and Copilot don't publish busy/idle, so they only show the agent
+  local agent = s.agent
+  if s.status then
+    agent = agent .. " " .. s.status .. (s.waiting_for and (":" .. s.waiting_for) or "")
   end
-  local name = M.short(s) .. (s.branch and (" [" .. s.branch .. "]") or "")
+  local title = display_name(s) .. (s.branch and (" [" .. s.branch .. "]") or "")
   local where = (s.where or s.host or "unknown terminal") .. (s.reachable and "" or " ⊘")
-  local parts = { (STATUS_ICON[s.status] or "·") .. " " .. status, name, where }
+  local parts = { (STATUS_ICON[s.status] or "·") .. " " .. agent, title, where }
   if s.title then
     parts[#parts + 1] = "“" .. util.truncate(s.title, 32) .. "”"
   end

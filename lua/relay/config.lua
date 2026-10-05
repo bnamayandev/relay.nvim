@@ -10,7 +10,7 @@ local M = {}
 ---@field note string|false     normal: edit the context of the queued snippet under the cursor
 ---@field clear string|false    normal: clear the queue
 ---@field target string|false   normal: pin (or unpin) the session sends go to
----@field sessions string|false normal: jump to a running Claude Code session
+---@field sessions string|false normal: jump to a running agent session
 
 ---@class relay.Config
 ---@field keymaps relay.Keymaps|false
@@ -22,6 +22,7 @@ local M = {}
 ---@field clipboard_fallback boolean
 ---@field submit_delay integer
 ---@field claude_dir string|nil
+---@field agents table<string, boolean>
 ---@field backends table<string, boolean>
 ---@field signs boolean
 ---@field virtual_text boolean
@@ -39,14 +40,14 @@ local defaults = {
     target = "<leader>at",
     sessions = "<leader>aj",
   },
-  -- How a snippet is handed to Claude:
-  --   "ref"    -> @path#L10-20 mention; Claude reads the lines from disk
+  -- How a snippet is handed to the agent:
+  --   "ref"    -> @path#L10-20 mention; the agent reads the lines from disk
   --   "inline" -> the code itself in a fenced block
   --   "auto"   -> ref when the file is saved on disk, inline otherwise (unsaved, no file, deleted)
   format = "auto",
-  -- Press Enter in Claude after pasting. When false the text waits in Claude's prompt.
+  -- Press Enter in the agent after pasting. When false the text waits in its prompt.
   submit = false,
-  -- Switch to the Claude pane after sending. "auto" focuses only when not submitting.
+  -- Switch to the agent's pane after sending. "auto" focuses only when not submitting.
   focus = "auto",
   -- Empty the queue after it was delivered (restorable with :Relay restore).
   clear_on_send = true,
@@ -58,6 +59,8 @@ local defaults = {
   submit_delay = 80,
   -- Claude Code's config dir. Defaults to $CLAUDE_CONFIG_DIR or ~/.claude.
   claude_dir = nil,
+  -- Which agents' sessions to list. Every agent gets the same message.
+  agents = { claude = true, codex = true, copilot = true },
   -- Where sessions can be reached. Disable a backend to ignore sessions hosted by it.
   backends = { nvim = true, tmux = true, zellij = true, kitty = true, wezterm = true },
   -- Mark queued lines in the sign column.

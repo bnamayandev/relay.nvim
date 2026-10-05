@@ -1,4 +1,4 @@
--- The overlay opened from visual mode: a preview of the selection and its context for Claude.
+-- The overlay opened from visual mode: a preview of the selection and its context for the agent.
 local config = require("relay.config")
 local ui = require("relay.ui")
 local queue = require("relay.queue")
@@ -143,7 +143,7 @@ function M.open(data)
   end
 
   local modes = { "i", "n" }
-  ui.map(nbuf, modes, "<CR>", send({}), "Relay: send to Claude")
+  ui.map(nbuf, modes, "<CR>", send({}), "Relay: send to the agent")
   ui.map(nbuf, modes, "<C-s>", send({ submit = true }), "Relay: send and press Enter")
   ui.map(nbuf, modes, "<C-t>", send({ pick = true }), "Relay: send to a chosen session")
   ui.map(nbuf, modes, "<Tab>", action(enqueue), "Relay: add to queue")

@@ -1,8 +1,14 @@
-"""Stand-in for an interactive Claude Code session: turns on bracketed paste like Claude
-does and appends every byte it receives to the log file given as the first argument."""
+"""Stand-in for an interactive agent session (Claude Code, Codex, Copilot): turns on bracketed
+paste like they do and appends every byte it receives to the log file given as the first
+argument. FAKE_COMM renames the process, like Copilot's native binary ("MainThread")."""
 import os
 import sys
 import tty
+
+if os.environ.get("FAKE_COMM"):
+    import ctypes
+
+    ctypes.CDLL(None).prctl(15, os.environ["FAKE_COMM"].encode(), 0, 0, 0)  # PR_SET_NAME
 
 log = sys.argv[1]
 fd = sys.stdin.fileno()

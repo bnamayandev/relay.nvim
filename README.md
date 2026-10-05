@@ -1,25 +1,25 @@
 # relay.nvim
 
-Send code from Neovim straight into the prompt of a running [Claude Code](https://claude.com/claude-code) session — or collect a queue of snippets, annotate them, and send them all at once. Built for working with several agents in parallel: every send looks up the live sessions at that moment and lets you pick one.
+Send code from Neovim straight into the prompt of a running [Claude Code](https://claude.com/claude-code), [Codex](https://github.com/openai/codex) or [GitHub Copilot CLI](https://github.com/github/copilot-cli) session — or collect a queue of snippets, annotate them, and send them all at once. Built for working with several agents in parallel: every send looks up the live sessions at that moment and lets you pick one, whichever agent it is.
 
 - **One menu, `<leader>aq`**: on a selection (or the cursor line) — add to queue, add with context, send it to your agent, send the whole queue, view the queue.
-- **Claude's own mention syntax**: saved code goes as `@src/app.ts#L10-24` (Claude reads exactly those lines). Code that only exists in Neovim (unsaved changes, buffers without a file) is inlined as a fenced block.
+- **One message for every agent**: saved code goes as `@src/app.ts#L10-24` (the agent reads exactly those lines), the same for Claude, Codex and Copilot. Code that only exists in Neovim (unsaved changes, buffers without a file) is inlined as a fenced block.
 - **Queue**: add any number of snippets from any files, give each its context, reorder, delete, preview the exact message, undo deletions.
-- **Live session discovery**: every running `claude` on the machine, with its name, busy/idle status, cwd and git branch, wherever it runs: a Neovim terminal (this one or another instance), tmux, zellij, kitty or WezTerm.
-- **Snippets follow your code**: line numbers track edits, and when Claude rewrites the file on disk the snippet is found again by its content.
+- **Live session discovery**: every running `claude`, `codex` and `copilot` on the machine, with its cwd and git branch (and for Claude its name and busy/idle status), wherever it runs: a Neovim terminal (this one or another instance), tmux, zellij, kitty or WezTerm.
+- **Snippets follow your code**: line numbers track edits, and when an agent rewrites the file on disk the snippet is found again by its content.
 
 ## Requirements
 
 - Neovim ≥ 0.10
-- Claude Code running in one of:
+- Claude Code, Codex or GitHub Copilot CLI (`copilot`, or `gh copilot`) running in one of:
   - a Neovim `:terminal` (this instance, or another one on Linux)
   - tmux
-  - zellij (≥ 0.44 pastes into any pane; older versions can only type into the focused pane, so Relay moves the focus to the Claude pane first — needs a single client attached to that session)
+  - zellij (≥ 0.44 pastes into any pane; older versions can only type into the focused pane, so Relay moves the focus to the agent's pane first — needs a single client attached to that session)
   - kitty with remote control (`allow_remote_control socket-only` + `listen_on unix:/tmp/kitty`)
   - WezTerm
 - Linux gets the full feature set (process info is read from `/proc`). On macOS, sessions in Neovim terminals, tmux and WezTerm work.
 
-Sessions that can't be typed into (e.g. Claude in a plain terminal window) still show up; picking one copies the message to the clipboard instead.
+Sessions that can't be typed into (e.g. an agent in a plain terminal window) still show up; picking one copies the message to the clipboard instead.
 
 ## Install
 
@@ -49,7 +49,7 @@ Default keymaps (all under `<leader>a`, change or disable them in `opts.keymaps`
 | normal | `<leader>an` | edit the context of the queued snippet under the cursor |
 | normal | `<leader>ax` | clear the queue |
 | normal | `<leader>at` | pin the session sends go to (or unpin) |
-| normal | `<leader>aj` | jump to a running Claude session |
+| normal | `<leader>aj` | jump to a running agent session |
 
 ### Menu
 
@@ -70,7 +70,7 @@ Also `1`–`5`, or move with `j`/`k` and press `⏎`. In the prompt box `⏎` se
 | Key | Action |
 | --- | --- |
 | `⏎` | send this snippet (with its context) |
-| `<C-s>` | send and press Enter in Claude |
+| `<C-s>` | send and press Enter in the agent |
 | `<Tab>` | add to the queue |
 | `<C-a>` | add to the queue and send the whole queue |
 | `<C-t>` | send, choosing the session even if one is pinned |
@@ -100,7 +100,7 @@ The context box is a normal buffer: `<C-j>` inserts a new line.
 
 The rows flag snippets whose code was edited outside Neovim, deleted (`gone from file`, sent with the text you queued), or has unsaved changes.
 
-### What Claude receives
+### What the agent receives
 
 ````text
 Make the reload idempotent.
@@ -115,21 +115,24 @@ local x = compute()
 ```
 ````
 
-The prompt comes first, then the snippets separated by blank lines; a snippet's context sits in front of it as `context: code`. Paths are relative to the receiving session's directory when the file is inside it. The text arrives as a bracketed paste, so Claude shows it as `[Pasted text #1 +N lines]` and still resolves every mention when you submit.
+Claude Code, Codex and Copilot all get this same text. The prompt comes first, then the snippets separated by blank lines; a snippet's context sits in front of it as `context: code`. Paths are relative to the receiving session's directory when the file is inside it. The text arrives as a bracketed paste, so Claude shows it as `[Pasted text #1 +N lines]` and still resolves every mention when you submit.
 
-By default the text waits in Claude's prompt and Relay switches to that pane so you can add to it; with `submit = true` (or `<C-s>` in the overlay) Enter is pressed for you and you stay in Neovim.
+Codex gets one extra space at the end. Without it, a message that ends in a mention leaves Codex's file search popup open, and that popup would take the Enter meant to submit.
+
+By default the text waits in the agent's prompt and Relay switches to that pane so you can add to it; with `submit = true` (or `<C-s>` in the overlay) Enter is pressed for you and you stay in Neovim.
 
 ### Choosing the session
 
-When you send, Relay lists the running sessions:
+When you send, Relay lists the running sessions of every agent:
 
 ```
-○ idle  api-refactor [feat/cache]  tmux work:2.1  ~/code/api-wt-cache
-● busy  relay-nvim [main]  nvim terminal #12  ~/projects/relay.nvim
-◐ waiting:permission  docs [main]  zellij agents/3  ~/code/docs
+○ claude idle  api-refactor [feat/cache]  tmux work:2.1  ~/code/api-wt-cache
+● claude busy  relay-nvim [main]  nvim terminal #12  ~/projects/relay.nvim
+· codex  relay.nvim [main]  zellij agents/3  ~/projects/relay.nvim
+· copilot  docs [main]  kitty window 4  ~/code/docs
 ```
 
-With one session it's used directly; with several you pick (the one you used last and the one working on the current project come first). `<leader>at` pins a session so sends go straight there until it exits.
+Only Claude Code publishes busy/idle, so Codex and Copilot sessions show just the agent. With one session it's used directly; with several you pick (the one you used last and the one working on the current project come first). `<leader>at` pins a session so sends go straight there until it exits.
 
 ## Commands
 
@@ -157,12 +160,13 @@ require("relay").setup({
   }, -- or false; set a single key to false to skip it
   format = "auto",          -- "auto" | "ref" (@mention) | "inline" (code block)
   submit = false,           -- press Enter after pasting
-  focus = "auto",           -- switch to the Claude pane: true | false | "auto" (when not submitting)
+  focus = "auto",           -- switch to the agent's pane: true | false | "auto" (when not submitting)
   clear_on_send = true,     -- empty the queue after sending (:Relay restore brings it back)
   diagnostics = false,      -- include LSP diagnostics by default
   clipboard_fallback = true,-- copy the message when no session can receive it
   submit_delay = 80,        -- ms between paste and Enter
   claude_dir = nil,         -- default: $CLAUDE_CONFIG_DIR or ~/.claude
+  agents = { claude = true, codex = true, copilot = true }, -- false: ignore that agent's sessions
   backends = { nvim = true, tmux = true, zellij = true, kitty = true, wezterm = true },
   signs = true,             -- mark queued lines in the sign column
   virtual_text = true,      -- "󰚩 #2 context" after the first queued line
@@ -189,13 +193,13 @@ The `User RelayQueueChanged` autocmd fires whenever the queue changes.
 Nothing runs in the background. Each time you send, Relay:
 
 1. reads Claude Code's live session registry (`~/.claude/sessions/*.json`: name, cwd, busy/idle), skipping stale entries whose pid now belongs to another process;
-2. scans the process table for `claude` processes (on Linux straight from `/proc`, a few milliseconds, no subprocess), which also covers Claude versions without the registry;
-3. finds the program that owns each session's terminal: the first ancestor process on a different tty. So Claude in tmux inside zellij inside kitty is reached through tmux, never through an outer layer;
+2. scans the process table for `claude`, `codex` and `copilot` processes (on Linux straight from `/proc`, a few milliseconds, no subprocess), which also covers Claude versions without the registry. Agents are recognized by their command line: the npm installs of Codex and Copilot run a node wrapper that starts a native binary, and that pair counts as one session; one-shot runs (`claude -p`, `codex exec`, `copilot -p`) don't count;
+3. finds the program that owns each session's terminal: the first ancestor process on a different tty. So an agent in tmux inside zellij inside kitty is reached through tmux, never through an outer layer;
 4. asks only the terminals that actually host sessions for details (one `tmux list-panes` per tmux server, and so on), using the exact binary that runs the server, so versions always match.
 
 Discovery takes a few milliseconds plus one short command per multiplexer that hosts a session.
 
-Text is sent as a bracketed paste with control characters removed, so a snippet can never end the paste early or press keys in Claude.
+Text is sent as a bracketed paste with control characters removed, so a snippet can never end the paste early or press keys in the agent.
 
 ## Health
 
@@ -207,4 +211,4 @@ Text is sent as a bracketed paste with control characters removed, so a snippet 
 nvim --headless --clean -l tests/run.lua
 ```
 
-The end-to-end tests run fake Claude sessions (python3) in Neovim terminals; nothing is sent to real sessions.
+The end-to-end tests run fake Claude, Codex and Copilot sessions (python3) in Neovim terminals; nothing is sent to real sessions.

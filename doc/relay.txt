@@ -1,4 +1,4 @@
-*relay.txt*  Send code from Neovim to Claude Code sessions
+*relay.txt*  Send code from Neovim to Claude Code, Codex and Copilot sessions
 
 ==============================================================================
 CONTENTS                                                       *relay-contents*
@@ -16,19 +16,20 @@ CONTENTS                                                       *relay-contents*
 ==============================================================================
 1. INTRODUCTION                                                   *relay-intro*
 
-relay.nvim pastes code into the prompt of a running Claude Code session.
-Press <leader>aq on a selection (or a line) for a menu: add it to the queue,
-add it with context, send it to your agent, send the whole queue, or view the
-queue. Sends ask for an optional prompt, which goes at the top.
+relay.nvim pastes code into the prompt of a running Claude Code, Codex or
+GitHub Copilot CLI session. Press <leader>aq on a selection (or a line) for a
+menu: add it to the queue, add it with context, send it to your agent, send
+the whole queue, or view the queue. Sends ask for an optional prompt, which
+goes at the top.
 
-Saved code is sent as a Claude Code mention, `@path#L10-20`, so Claude reads
-exactly those lines. Code that only exists in Neovim (unsaved changes, buffers
-without a file, code deleted after it was queued) is sent inline in a fenced
-block. See |relay-format|.
+Saved code is sent as a mention, `@path#L10-20`, so the agent reads exactly
+those lines. Every agent gets the same message. Code that only exists in
+Neovim (unsaved changes, buffers without a file, code deleted after it was
+queued) is sent inline in a fenced block. See |relay-format|.
 
 Sessions are looked up live on every send (nothing polls in the background).
 They can run in a Neovim |terminal| (this or another instance), tmux, zellij
-(before 0.44 by moving the focus to the Claude pane), kitty with remote
+(before 0.44 by moving the focus to the agent's pane), kitty with remote
 control, or WezTerm. Sessions that can't be typed into are still listed;
 choosing one copies the message to the clipboard.
 
@@ -63,6 +64,7 @@ Defaults: >lua
       clipboard_fallback = true,
       submit_delay = 80,
       claude_dir = nil,
+      agents = { claude = true, codex = true, copilot = true },
       backends = { nvim = true, tmux = true, zellij = true, kitty = true,
                    wezterm = true },
       signs = true,
@@ -79,10 +81,10 @@ format          "ref": `@path#L10-20` mention. "inline": the code in a fenced
                 block. "auto": ref when the file is saved on disk, inline
                 otherwise. Can be overridden per snippet.
 
-submit          Press Enter in Claude after pasting.
+submit          Press Enter in the agent after pasting.
 
                                                                 *relay-focus*
-focus           Switch to the Claude pane/window after sending. "auto" does
+focus           Switch to the agent's pane/window after sending. "auto" does
                 so only when not submitting (you'll want to continue typing
                 there).
 
@@ -98,6 +100,10 @@ submit_delay    Milliseconds between the paste and Enter.
 
 claude_dir      Claude Code's config directory (for the session registry).
                 Defaults to $CLAUDE_CONFIG_DIR or ~/.claude.
+
+                                                               *relay-agents*
+agents          Which agents' sessions to list: `claude`, `codex`,
+                `copilot`. Set one to `false` to ignore its sessions.
 
 backends        Turn off support for a terminal. Its sessions are then listed
                 as clipboard-only.
@@ -128,7 +134,7 @@ Opened from visual mode with <leader>aa (or `:'<,'>Relay`). Shows the
 selection and a note box in insert mode.
 
   <CR>          send this snippet with its context
-  <C-s>         send and press Enter in Claude
+  <C-s>         send and press Enter in the agent
   <Tab>         add to the queue
   <C-a>         add to the queue, then send the whole queue
   <C-t>         send, choosing the session (ignores a pinned one)
@@ -142,7 +148,7 @@ selection and a note box in insert mode.
 4. QUEUE                                                          *relay-queue*
 
 Queued snippets are tracked with extmarks: their line numbers follow your
-edits. When the file is reloaded from disk (e.g. Claude changed it and
+edits. When the file is reloaded from disk (e.g. an agent changed it and
 'autoread' picked it up), each snippet is found again by its content. If only
 its first and last lines survived it is marked "edited outside"; if it's gone
 it is marked "gone from file" and sent inline with the text you queued.
@@ -171,22 +177,33 @@ Keys in the queue window (<leader>aq in normal mode, or `:Relay`):
 5. SESSIONS                                                    *relay-sessions*
 
 On send, Relay reads Claude Code's session registry (~/.claude/sessions) and
-scans the process table for `claude` processes. For each session it finds the
+scans the process table for `claude`, `codex` and `copilot` processes. They
+are recognized by their command line, so the npm installs (a node wrapper that
+starts a native binary) count as one session, and `claude -p`, `codex exec`
+and `copilot -p` don't count. For each session it finds the
 program that owns its terminal: the first ancestor process attached to a
 different tty. A session in tmux inside zellij is therefore reached through
 tmux, never through the outer layers.
 
 With one session it is used directly. With several, a |vim.ui.select()|
-picker lists them: the last used and those working on the current project
-first. Pin one with <leader>at to skip the picker until it exits.
+picker lists them, each with its agent: >
+    ○ claude idle  api-refactor [main]  tmux work:2.1  ~/code/api
+    · codex  relay.nvim [main]  zellij agents/3  ~/projects/relay.nvim
+    · copilot  docs [main]  kitty window 4  ~/code/docs
+<
+Only Claude Code publishes busy/idle. The last used session and those working
+on the current project come first. Pin one with <leader>at to skip the picker
+until it exits.
 
 Text arrives as a bracketed paste with control characters removed. Claude
 shows a multi-line paste as "[Pasted text #1 +N lines]" and resolves the
-mentions inside it on submit.
+mentions inside it on submit. Codex gets a space after the message: without
+it, a message ending in a mention leaves Codex's file search popup open, and
+that popup would take the Enter meant to submit.
 
 zellij older than 0.44 can only type into the focused pane. When one client is
 attached to the session, Relay moves its focus through the panes (and tabs)
-until the Claude pane is focused, checks that with `zellij action
+until the agent's pane is focused, checks that with `zellij action
 list-clients`, types, and moves the focus back unless it should stay there
 (see |relay-focus|). zellij 0.44+ pastes into the pane without moving focus.
 

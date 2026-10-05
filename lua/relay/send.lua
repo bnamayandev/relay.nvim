@@ -34,7 +34,7 @@ function M.pick(list, opts, cb)
     entries[#entries + 1] = { unpin = true }
   end
   vim.ui.select(entries, {
-    prompt = opts.prompt or "Send to Claude session",
+    prompt = opts.prompt or "Send to session",
     kind = "relay.session",
     format_item = function(e)
       if e.clipboard then
@@ -65,7 +65,7 @@ function M.resolve(opts, cb)
       util.warn(("Pinned session %s %s — unpinned"):format(pinned.label, s and "can't be reached" or "has ended"))
     end
     if #list == 0 then
-      return cb(false, "No running Claude Code session found")
+      return cb(false, "No running agent session found (Claude Code, Codex, Copilot)")
     end
     if #list == 1 and not opts.pick then
       return cb(list[1])
@@ -90,7 +90,7 @@ local function focus_after(opts, submit)
   return focus == true
 end
 
---- Send snippets (the queue by default) to a Claude Code session.
+--- Send snippets (the queue by default) to an agent session.
 ---@param opts? { items?: relay.Item[], message?: string, pick?: boolean, submit?: boolean, focus?: boolean|"auto", on_sent?: fun() }
 function M.send(opts)
   opts = opts or {}
@@ -153,9 +153,9 @@ end
 function M.pin()
   sessions.discover(function(list)
     if #list == 0 and not state.pinned then
-      return util.warn("No running Claude Code session found")
+      return util.warn("No running agent session found")
     end
-    M.pick(list, { prompt = "Pin Claude session", unpin = state.pinned ~= nil }, function(choice)
+    M.pick(list, { prompt = "Pin session", unpin = state.pinned ~= nil }, function(choice)
       if not choice then
         return
       end
@@ -180,9 +180,9 @@ end
 function M.jump()
   sessions.discover(function(list)
     if #list == 0 then
-      return util.warn("No running Claude Code session found")
+      return util.warn("No running agent session found")
     end
-    M.pick(list, { prompt = "Jump to Claude session" }, function(choice)
+    M.pick(list, { prompt = "Jump to session" }, function(choice)
       if not (choice and choice.session) then
         return
       end

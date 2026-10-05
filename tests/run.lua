@@ -20,6 +20,7 @@ local capture = require("relay.capture")
 local format = require("relay.format")
 local transport = require("relay.transport")
 local sessions = require("relay.sessions")
+local agents = require("relay.agents")
 
 local passed, failed = 0, 0
 local current = ""
@@ -143,6 +144,46 @@ test("mentions are relative to the session and quoted when needed", function()
   eq('@"c.c++"', format.mention(dir .. "/c.c++", nil, dir))
   eq("@c.c++#L1", format.mention(dir .. "/c.c++", "#L1", dir))
   eq(nil, format.mention(dir .. "/d#e.lua", "#L1", dir))
+end)
+
+test("agents are recognized by their command line", function()
+  local function id(argv)
+    local a = agents.match(argv)
+    return a and a.id or nil
+  end
+  eq("claude", id({ "claude" }))
+  eq("claude", id({ "node", "/usr/lib/node_modules/@anthropic-ai/claude-code/cli.js" }))
+  eq(nil, id({ "claude", "-p", "hi" }))
+  eq(nil, id({ "claude", "mcp", "list" }))
+  -- the npm wrapper and the native binary it starts
+  eq("codex", id({ "node", "/home/u/.nvm/versions/node/v22/bin/codex", "-c", "x=1" }))
+  eq("codex", id({ "/x/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex" }))
+  eq("codex", id({ "codex", "-p", "work" }), "-p is --profile for codex")
+  eq("codex", id({ "codex", "resume", "--last" }))
+  eq(nil, id({ "codex", "exec", "fix it" }))
+  eq(nil, id({ "codex", "e", "fix it" }))
+  eq("copilot", id({ "node", "/usr/lib/node_modules/.bin/copilot" }))
+  eq("copilot", id({ "node", "/usr/lib/node_modules/@github/copilot/npm-loader.js" }))
+  eq("copilot", id({ "/x/node_modules/@github/copilot-linux-x64/copilot", "--resume" }))
+  eq("copilot", id({ "copilot", "-i", "fix it" }))
+  eq(nil, id({ "copilot", "-p", "fix it" }))
+  eq(nil, id({ "copilot", "--prompt=fix it" }))
+  eq(nil, id({ "copilot", "login" }))
+  -- not agents
+  eq(nil, id({ "node", "/x/node_modules/@github/copilot-language-server/dist/language-server.js", "--stdio" }))
+  eq(nil, id({ "node", "server.js" }))
+  eq(nil, id({ "zsh" }))
+  eq(nil, id({}))
+end)
+
+test("session labels name the agent", function()
+  local base = { pid = 7, cwd = "/srv/api", reachable = true, where = "tmux w:1.0" }
+  eq("· codex  api  tmux w:1.0  /srv/api", sessions.label(vim.tbl_extend("force", base, { agent = "codex" })))
+  eq(
+    "○ claude idle  refactor [main]  tmux w:1.0  /srv/api",
+    sessions.label(vim.tbl_extend("force", base, { agent = "claude", status = "idle", name = "refactor", branch = "main" }))
+  )
+  eq("copilot api", sessions.short(vim.tbl_extend("force", base, { agent = "copilot" })))
 end)
 
 -- capture ------------------------------------------------------------------------------
@@ -521,23 +562,22 @@ else
     return out
   end
 
+  --- Run `job` in a terminal of this Neovim until it has created `log`; returns its pid.
+  local function start_term(job, log, env)
+    vim.cmd("enew")
+    local chan
+    if vim.fn.has("nvim-0.11") == 1 then
+      chan = vim.fn.jobstart(job, { term = true, env = env })
+    else
+      chan = vim.fn.termopen(job, { env = env })
+    end
+    wait_file(log)
+    return vim.fn.jobpid(chan)
+  end
+
   -- a fake session in a terminal of this Neovim, registered like Claude Code does
   local local_log = tmp .. "/local.log"
-  vim.cmd("enew")
-  local job = vim.list_extend(vim.deepcopy(fake), { local_log })
-  if vim.fn.has("nvim-0.11") == 1 then
-    vim.fn.jobstart(job, { term = true })
-  else
-    vim.fn.termopen(job)
-  end
-  local term_buf = vim.api.nvim_get_current_buf()
-  wait_file(local_log)
-  local local_pid
-  for _, chan in ipairs(vim.api.nvim_list_chans()) do
-    if chan.buffer == term_buf then
-      local_pid = vim.fn.jobpid(chan.id)
-    end
-  end
+  local local_pid = start_term(vim.list_extend(vim.deepcopy(fake), { local_log }), local_log)
   local stat = proc.parse_stat(local_pid, util.read_file("/proc/" .. local_pid .. "/stat"))
   vim.fn.writefile({
     vim.json.encode({
@@ -665,6 +705,102 @@ else
     end, 20)
     eq("\27[200~is this right?\n\nreturns the sum: @e2.lua#L4\27[201~", util.read_file(local_log))
     eq(1, queue.count(), "sending one line leaves the queue alone")
+  end)
+
+  -- Codex as its npm package runs it: a node wrapper that starts the native binary
+  vim.fn.mkdir(tmp .. "/native", "p")
+  vim.uv.fs_symlink(python, tmp .. "/bin/node")
+  vim.uv.fs_symlink(root .. "/tests/fake_wrapper.py", tmp .. "/bin/codex")
+  vim.uv.fs_symlink(python, tmp .. "/native/codex")
+  local codex_log = tmp .. "/codex.log"
+  local codex_pid = start_term({
+    tmp .. "/bin/node",
+    tmp .. "/bin/codex",
+    tmp .. "/native/codex",
+    root .. "/tests/fake_claude.py",
+    codex_log,
+  }, codex_log)
+  -- Copilot's native binary, which names its process "MainThread"
+  vim.uv.fs_symlink(python, tmp .. "/native/copilot")
+  local copilot_log = tmp .. "/copilot.log"
+  local copilot_pid = start_term(
+    { tmp .. "/native/copilot", root .. "/tests/fake_claude.py", copilot_log },
+    copilot_log,
+    { FAKE_COMM = "MainThread" }
+  )
+  local agent_logs = { codex = codex_log, copilot = copilot_log }
+
+  test("codex and copilot sessions are discovered once each", function()
+    eq("MainThread\n", util.read_file("/proc/" .. copilot_pid .. "/comm"), "fake copilot renamed itself")
+    local count = { codex = 0, copilot = 0 }
+    for _, s in ipairs(discover()) do
+      local cmd = (util.read_file("/proc/" .. s.pid .. "/cmdline") or ""):gsub("%z", " ")
+      for tag, log in pairs(agent_logs) do
+        if cmd:find(log, 1, true) then
+          count[tag] = count[tag] + 1
+        end
+      end
+    end
+    eq({ codex = 1, copilot = 1 }, count, "sessions per agent (the native codex under its wrapper is no session)")
+    local found = only_fakes(discover(), agent_logs)
+    eq(codex_pid, found.codex.pid)
+    eq("codex", found.codex.agent)
+    eq("nvim", found.codex.host)
+    truthy(found.codex.reachable, "codex reachable")
+    eq(copilot_pid, found.copilot.pid)
+    eq("copilot", found.copilot.agent)
+    truthy(found.copilot.reachable, "copilot reachable")
+  end)
+
+  test("codex and copilot get the same message (codex with a space after it)", function()
+    local found = only_fakes(discover(), agent_logs)
+    for tag, s in pairs(found) do
+      local done
+      transport.send(s, "explain\n\n@a.lua#L1-2", { submit = true }, function(ok, err)
+        done = { ok, err }
+      end)
+      vim.wait(3000, function()
+        return done ~= nil and (util.read_file(agent_logs[tag]) or ""):find("\r", 1, true) ~= nil
+      end, 20)
+      eq({ true, nil }, done, tag .. " result")
+      local space = tag == "codex" and " " or ""
+      eq("\27[200~explain\n\n@a.lua#L1-2" .. space .. "\27[201~\r", util.read_file(agent_logs[tag]), tag .. " log")
+    end
+  end)
+
+  test("the picker offers every agent and sends to the one picked", function()
+    local found = only_fakes(discover(), agent_logs)
+    vim.fn.writefile({}, copilot_log)
+    open_file("e3.lua")
+    vim.api.nvim_win_set_cursor(0, { 2, 0 })
+    in_visual("V", relay.add)
+    local labels
+    vim.ui.select = function(entries, opts, cb)
+      labels = table.concat(vim.tbl_map(opts.format_item, entries), "\n")
+      for _, e in ipairs(entries) do
+        if e.session and e.session.pid == found.copilot.pid then
+          return cb(e)
+        end
+      end
+      cb(nil)
+    end
+    relay.send({ message = "explain" })
+    vim.wait(3000, function()
+      return (util.read_file(copilot_log) or "") ~= ""
+    end, 20)
+    eq("\27[200~explain\n\n@e3.lua#L2\27[201~", util.read_file(copilot_log))
+    truthy(labels:find("○ claude idle  fake-session", 1, true), labels)
+    truthy(labels:find("· codex  project", 1, true), labels)
+    truthy(labels:find("· copilot  project", 1, true), labels)
+  end)
+
+  test("agents can be turned off", function()
+    local config = require("relay.config")
+    config.options.agents.codex = false
+    local found = only_fakes(discover(), agent_logs)
+    config.options.agents.codex = true
+    eq(nil, found.codex)
+    truthy(found.copilot, "copilot still listed")
   end)
 
   remote:kill(15)
