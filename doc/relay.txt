@@ -28,9 +28,9 @@ block. See |relay-format|.
 
 Sessions are looked up live on every send (nothing polls in the background).
 They can run in a Neovim |terminal| (this or another instance), tmux, zellij
-(0.44+, or older when the Claude pane is focused), kitty with remote control,
-or WezTerm. Sessions that can't be typed into are still listed; choosing one
-copies the message to the clipboard.
+(before 0.44 by moving the focus to the Claude pane), kitty with remote
+control, or WezTerm. Sessions that can't be typed into are still listed;
+choosing one copies the message to the clipboard.
 
 Requires Neovim 0.10+. Linux has full support; elsewhere sessions in Neovim
 terminals, tmux and WezTerm work.
@@ -81,6 +81,7 @@ format          "ref": `@path#L10-20` mention. "inline": the code in a fenced
 
 submit          Press Enter in Claude after pasting.
 
+                                                                *relay-focus*
 focus           Switch to the Claude pane/window after sending. "auto" does
                 so only when not submitting (you'll want to continue typing
                 there).
@@ -183,9 +184,11 @@ Text arrives as a bracketed paste with control characters removed. Claude
 shows a multi-line paste as "[Pasted text #1 +N lines]" and resolves the
 mentions inside it on submit.
 
-zellij older than 0.44 can only type into the focused pane, so a session there
-is reachable only while its pane is focused (e.g. its own zellij session).
-Otherwise the message goes to the clipboard.
+zellij older than 0.44 can only type into the focused pane. When one client is
+attached to the session, Relay moves its focus through the panes (and tabs)
+until the Claude pane is focused, checks that with `zellij action
+list-clients`, types, and moves the focus back unless it should stay there
+(see |relay-focus|). zellij 0.44+ pastes into the pane without moving focus.
 
 kitty needs `allow_remote_control` and `listen_on` in kitty.conf.
 

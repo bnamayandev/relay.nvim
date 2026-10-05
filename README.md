@@ -14,7 +14,7 @@ Send code from Neovim straight into the prompt of a running [Claude Code](https:
 - Claude Code running in one of:
   - a Neovim `:terminal` (this instance, or another one on Linux)
   - tmux
-  - zellij ≥ 0.44 (older versions: only when the Claude pane is the focused one)
+  - zellij (≥ 0.44 pastes into any pane; older versions can only type into the focused pane, so Relay moves the focus to the Claude pane first — needs a single client attached to that session)
   - kitty with remote control (`allow_remote_control socket-only` + `listen_on unix:/tmp/kitty`)
   - WezTerm
 - Linux gets the full feature set (process info is read from `/proc`). On macOS, sessions in Neovim terminals, tmux and WezTerm work.

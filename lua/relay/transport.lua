@@ -168,26 +168,159 @@ local function zellij(s, args)
   return concat({ s.addr.exe, "--session", s.addr.session, "action" }, args)
 end
 
---- zellij < 0.44 types into the focused pane: make sure that is still the session's pane.
-local function zellij_still_focused(s, cb)
+-- zellij < 0.44 can only type into the focused pane. With a single client attached, Relay
+-- moves that client's focus to the session's pane (through the panes of each tab), checks
+-- with `list-clients` that it really is focused, types, and moves focus back when asked.
+local ZELLIJ_MAX_STEPS = 64
+
+--- The pane each attached client has focused (e.g. { "terminal_3" }), nil on error.
+local function zellij_focused(s, cb)
   util.run(zellij(s, { "list-clients" }), nil, function(ok, out)
-    local clients, focused = 0, 0
-    for line in (ok and out or ""):gmatch("[^\n]+") do
+    if not ok then
+      return cb(nil)
+    end
+    local panes = {}
+    for line in out:gmatch("[^\n]+") do
       local id, pane = line:match("^%s*(%d+)%s+(%S+)")
       if id then
-        clients = clients + 1
-        focused = focused + (pane == "terminal_" .. s.addr.pane and 1 or 0)
+        panes[#panes + 1] = pane
       end
     end
-    cb(clients > 0 and focused == clients)
+    cb(panes)
+  end)
+end
+
+local function zellij_target(s)
+  return "terminal_" .. s.addr.pane
+end
+
+--- Cycle the panes of the current tab until `pane` is focused (or give up).
+local function zellij_cycle_to(s, pane, done, steps)
+  steps = steps or 0
+  zellij_focused(s, function(panes)
+    if (panes and panes[1] == pane) or steps >= ZELLIJ_MAX_STEPS then
+      return done()
+    end
+    run(zellij(s, { "focus-next-pane" }), nil, function()
+      zellij_cycle_to(s, pane, done, steps + 1)
+    end)
+  end)
+end
+
+--- Focus the session's pane. cb(ok, err, restore) — restore(done) puts the focus back.
+local function zellij_focus_pane(s, cb)
+  local target = zellij_target(s)
+  zellij_focused(s, function(panes)
+    if not panes or #panes ~= 1 then
+      return cb(false, "zellij < 0.44 needs exactly one client attached to that session")
+    end
+    local origin, tabs_moved = panes[1], 0
+    local function restore(done)
+      local function back(n)
+        if n == 0 then
+          return zellij_cycle_to(s, origin, done)
+        end
+        run(zellij(s, { "go-to-previous-tab" }), nil, function()
+          back(n - 1)
+        end)
+      end
+      back(tabs_moved)
+    end
+    if origin == target then
+      return cb(true, nil, restore)
+    end
+    util.run(zellij(s, { "query-tab-names" }), nil, function(_, out)
+      local tabs = 0
+      for _ in (out or ""):gmatch("[^\n]+") do
+        tabs = tabs + 1
+      end
+      tabs = math.max(tabs, 1)
+      local first, steps = origin, 0
+      local function not_found()
+        restore(function()
+          cb(false, "its pane was not found (floating or hidden?)")
+        end)
+      end
+      local function step()
+        steps = steps + 1
+        if steps > ZELLIJ_MAX_STEPS then
+          return not_found()
+        end
+        run(zellij(s, { "focus-next-pane" }), nil, function(ok, err)
+          if not ok then
+            return cb(false, err)
+          end
+          zellij_focused(s, function(now)
+            local cur = now and now[1]
+            if cur == target then
+              return cb(true, nil, restore)
+            elseif cur ~= first then
+              return step()
+            end
+            -- went around this tab: try the next one
+            if tabs_moved + 1 >= tabs then
+              return not_found()
+            end
+            run(zellij(s, { "go-to-next-tab" }), nil, function()
+              tabs_moved = tabs_moved + 1
+              zellij_focused(s, function(after)
+                first = after and after[1]
+                if first == target then
+                  return cb(true, nil, restore)
+                end
+                step()
+              end)
+            end)
+          end)
+        end)
+      end
+      step()
+    end)
   end)
 end
 
 backends.zellij = {
-  send = function(s, text, cb)
+  -- in "cycle" mode typing, Enter and focus are one sequence
+  combined = function(s)
+    return s.addr.mode == "cycle"
+  end,
+  send = function(s, text, cb, opts)
+    if s.addr.mode == "cycle" then
+      return zellij_focus_pane(s, function(ok, err, restore)
+        if not ok then
+          return cb(false, err)
+        end
+        run(zellij(s, { "write-chars", "--", M.bracketed(text) }), nil, function(written, write_err)
+          if not written then
+            return restore(function()
+              cb(false, write_err)
+            end)
+          end
+          local function finish()
+            if opts.focus then
+              return cb(true) -- stay in the Claude pane
+            end
+            restore(function()
+              cb(true)
+            end)
+          end
+          if not opts.submit then
+            return finish()
+          end
+          vim.defer_fn(function()
+            run(zellij(s, { "write", "13" }), nil, finish)
+          end, config.options.submit_delay)
+        end)
+      end)
+    end
     if s.addr.mode == "focused" then
-      return zellij_still_focused(s, function(focused)
-        if not focused then
+      -- several clients that all focus the pane: only type if that's still the case
+      return zellij_focused(s, function(panes)
+        local all = panes and #panes > 0
+        for _, pane in ipairs(panes or {}) do
+          all = all and pane == zellij_target(s)
+        end
+        if not all then
           return cb(false, "its pane is no longer focused (zellij < 0.44 can only type into the focused pane)")
         end
         run(zellij(s, { "write-chars", "--", M.bracketed(text) }), nil, cb)
@@ -198,7 +331,7 @@ backends.zellij = {
       if i > #pieces then
         return cb(true)
       end
-      run(zellij(s, { "paste", "--pane-id", "terminal_" .. s.addr.pane, "--", pieces[i] }), nil, function(ok, err)
+      run(zellij(s, { "paste", "--pane-id", zellij_target(s), "--", pieces[i] }), nil, function(ok, err)
         if not ok then
           return cb(false, err)
         end
@@ -211,11 +344,17 @@ backends.zellij = {
     if s.addr.mode == "focused" then
       return run(zellij(s, { "write", "13" }), nil, cb)
     end
-    run(zellij(s, { "send-keys", "--pane-id", "terminal_" .. s.addr.pane, "Enter" }), nil, cb)
+    run(zellij(s, { "send-keys", "--pane-id", zellij_target(s), "Enter" }), nil, cb)
   end,
   focus = function(s)
     if s.addr.mode == "pane" then
-      run(zellij(s, { "focus-pane-id", "terminal_" .. s.addr.pane }), nil, function() end)
+      run(zellij(s, { "focus-pane-id", zellij_target(s) }), nil, function() end)
+    elseif s.addr.mode == "cycle" then
+      zellij_focus_pane(s, function(ok, err)
+        if not ok then
+          util.warn("Can't switch to that zellij pane: " .. (err or "?"))
+        end
+      end)
     end
   end,
 }
@@ -269,13 +408,14 @@ function M.send(s, text, opts, cb)
     if not ok then
       return cb(false, err)
     end
+    local combined = backend.combined == true or (type(backend.combined) == "function" and backend.combined(s))
     local function done()
-      if opts.focus and not backend.combined then
+      if opts.focus and not combined then
         backend.focus(s)
       end
       cb(true)
     end
-    if not opts.submit or backend.combined then
+    if not opts.submit or combined then
       return done()
     end
     vim.defer_fn(function()

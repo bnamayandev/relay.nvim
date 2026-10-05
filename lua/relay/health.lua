@@ -41,11 +41,12 @@ function M.check()
     local version = vim.trim(vim.fn.system({ "zellij", "--version" }))
     local major, minor = version:match("(%d+)%.(%d+)")
     if major and (tonumber(major) > 0 or tonumber(minor) >= 44) then
-      health.ok(version .. " (can paste into any pane)")
+      health.ok(version .. " (pastes into any pane directly)")
     else
-      health.warn(
-        version .. ": zellij < 0.44 can only type into the focused pane",
-        { "Upgrade to zellij 0.44+ to send to Claude sessions in other panes", "Until then Relay copies the message to the clipboard" }
+      health.ok(
+        version
+          .. ": older zellij can only type into the focused pane, so Relay briefly moves focus to the"
+          .. " Claude pane (0.44+ pastes without moving focus)"
       )
     end
   else

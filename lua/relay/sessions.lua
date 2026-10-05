@@ -271,15 +271,18 @@ function resolvers.zellij(s, p, owner, _, jobs)
     s.reachable = true
     return
   end
-  -- Older zellij can only type into the focused pane: allow it when that pane is focused
-  -- for every client (e.g. an agent in its own session/window).
-  s.reason = ("zellij %d.%d can only type into the focused pane (zellij 0.44+ can target any pane)"):format(
+  -- Older zellij can only type into the focused pane. With one client attached, Relay moves
+  -- that client's focus to the pane while typing ("cycle"); with several, only when they all
+  -- focus it already.
+  s.reason = ("nobody is attached to zellij session %s (zellij %d.%d can only type into a focused pane)"):format(
+    session,
     major,
     minor
   )
   local cmd = { exe, "--session", session, "action", "list-clients" }
   add_job(jobs, "zellij " .. exe .. " " .. session, cmd, nil, function(res)
     if not res.ok then
+      s.reason = "zellij: " .. res.err
       return
     end
     local clients, focused = 0, 0
@@ -292,11 +295,23 @@ function resolvers.zellij(s, p, owner, _, jobs)
         end
       end
     end
-    if clients > 0 and focused == clients then
+    if clients == 1 then
+      s.addr.mode = "cycle"
+    elseif clients > 1 and focused == clients then
       s.addr.mode = "focused"
-      s.reachable = true
-      s.reason = nil
+    elseif clients > 1 then
+      s.reason = ("zellij session %s is attached in %d windows; zellij %d.%d can't pick a pane then (0.44+ can)"):format(
+        session,
+        clients,
+        major,
+        minor
+      )
+      return
+    else
+      return
     end
+    s.reachable = true
+    s.reason = nil
   end)
 end
 
