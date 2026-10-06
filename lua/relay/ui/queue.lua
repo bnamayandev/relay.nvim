@@ -22,7 +22,7 @@ local HINTS = {
 
 local HELP = {
   { "s", "send the queue" },
-  { "S", "send the queue to a chosen session" },
+  { "S", "send, picking a session" },
   { "m", "write a prompt (goes first), then send the queue" },
   { "e / i / a", "edit the snippet's context" },
   { "x / dd", "delete the snippet" },
@@ -128,7 +128,7 @@ end
 
 --- Window geometry. The list stays put while the preview below it changes height.
 local function layout()
-  local width = ui.width()
+  local width = ui.width(0.7)
   local cols, screen_rows = ui.screen()
   local border = ui.has_border() and 2 or 0
   local lh = math.max(1, math.min(math.max(queue.count(), 1), math.max(3, math.floor(screen_rows * 0.3))))
