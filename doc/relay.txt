@@ -40,7 +40,7 @@ terminals, tmux and WezTerm work.
 2. SETUP                                                          *relay-setup*
 
 With lazy.nvim: >lua
-    { dir = "~/projects/relay.nvim", opts = {} }
+    { "bnamayandev/relay.nvim", opts = {} }
 <
 Defaults: >lua
     require("relay").setup({

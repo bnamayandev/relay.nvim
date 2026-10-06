@@ -23,16 +23,14 @@ Sessions that can't be typed into (e.g. an agent in a plain terminal window) sti
 
 ## Install
 
-[lazy.nvim](https://github.com/folke/lazy.nvim), from a local checkout:
+[lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  dir = "~/projects/relay.nvim",
+  "bnamayandev/relay.nvim",
   opts = {},
 }
 ```
-
-(Once the repository is on GitHub, use `"<user>/relay.nvim"` instead of `dir`.)
 
 `setup()` only defines keymaps, highlights and a few autocmds; everything else loads on first use. To lazy-load anyway, add `cmd = "Relay"` and list the keymaps under `keys`.
 
