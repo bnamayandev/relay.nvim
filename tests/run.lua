@@ -752,6 +752,35 @@ else
     truthy(found.copilot.reachable, "copilot reachable")
   end)
 
+  test("copilot sessions are named from workspace.yaml via the inuse lock", function()
+    local home = tmp .. "/copilot-home"
+    local dir = home .. "/session-state/0b1c2d3e-aaaa-bbbb-cccc-111122223333"
+    vim.fn.mkdir(dir, "p")
+    -- another session's lock must not be picked up
+    vim.fn.mkdir(home .. "/session-state/other", "p")
+    vim.fn.writefile({ "name: wrong", "user_named: true" }, home .. "/session-state/other/workspace.yaml")
+    vim.fn.writefile({}, home .. "/session-state/other/inuse.1.lock")
+    vim.fn.writefile({}, dir .. "/inuse." .. copilot_pid .. ".lock")
+    vim.env.COPILOT_HOME = home
+    local function name_with(lines)
+      vim.fn.writefile(lines, dir .. "/workspace.yaml")
+      return only_fakes(discover(), agent_logs).copilot.name
+    end
+    local base = { "id: 0b1c2d3e-aaaa-bbbb-cccc-111122223333", "cwd: /x", "summary: Fix the parser" }
+    eq("api-refactor", name_with(vim.list_extend(vim.deepcopy(base), { "name: api-refactor", "user_named: true" })), "/rename")
+    eq("Fix the parser", name_with(vim.list_extend(vim.deepcopy(base), { "name: auto name" })), "auto name loses to summary")
+    eq("auto name", name_with({ "id: 0b1c2d3e-aaaa", "name: auto name" }), "auto name")
+    eq("0b1c2d3e", name_with({ "id: 0b1c2d3e-aaaa-bbbb-cccc-111122223333" }), "id prefix")
+    eq("multi word", name_with({ "name: |", "  multi word", "  second line", "user_named: true" }), "block scalar")
+    eq("folded", name_with({ "name: >-", "  folded", "user_named: true", "cwd: /x" }), "folded scalar")
+    eq("quoted: name", name_with({ 'name: "quoted: name"', "user_named: true" }), "quoted")
+    vim.fn.delete(dir .. "/workspace.yaml")
+    eq(nil, only_fakes(discover(), agent_logs).copilot.name, "no workspace.yaml falls back to the folder")
+    vim.fn.delete(dir .. "/inuse." .. copilot_pid .. ".lock")
+    eq(nil, only_fakes(discover(), agent_logs).copilot.name, "no lock")
+    vim.env.COPILOT_HOME = nil
+  end)
+
   test("codex and copilot get the same message (codex with a space after it)", function()
     local found = only_fakes(discover(), agent_logs)
     for tag, s in pairs(found) do

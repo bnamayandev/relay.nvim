@@ -92,6 +92,73 @@ local function read_registry(procs)
   return entries, seen
 end
 
+--- Top-level scalar keys of a Copilot workspace.yaml. Block scalars (`name: |`, `name: >-`)
+--- yield their first non-empty line.
+---@return table<string, string>
+local function parse_workspace(text)
+  local out = {}
+  local lines = vim.split(text, "\n", { plain = true })
+  local i = 1
+  while i <= #lines do
+    local key, val = lines[i]:gsub("\r$", ""):match("^([%w_%-]+):%s*(.-)%s*$")
+    if key then
+      if val:match("^[|>][+-]?%d*$") then
+        val = ""
+        while i < #lines do
+          local nxt = lines[i + 1]:gsub("\r$", "")
+          if nxt:match("^%s*$") then
+            i = i + 1
+          elseif nxt:match("^%s") then
+            val = val ~= "" and val or nxt:match("^%s*(.-)%s*$")
+            i = i + 1
+          else
+            break
+          end
+        end
+      else
+        val = val:match('^"(.*)"$') or val:match("^'(.*)'$") or val
+      end
+      if val ~= "" then
+        out[key] = val
+      end
+    end
+    i = i + 1
+  end
+  return out
+end
+
+---@return string
+function M.copilot_dir()
+  local dir = vim.env.COPILOT_HOME
+  if not dir or dir == "" then
+    dir = vim.fs.joinpath(vim.uv.os_homedir() or "~", ".copilot")
+  end
+  return vim.fs.normalize(dir)
+end
+
+--- Name of the Copilot session attached to `pid` (what `/rename` sets): the session whose
+--- directory holds `inuse.<pid>.lock`. Named by the user, else its summary, else the auto
+--- name, else the first 8 characters of the id.
+---@return string|nil
+local function copilot_name(pid)
+  local root = vim.fs.joinpath(M.copilot_dir(), "session-state")
+  local lock = ("inuse.%d.lock"):format(pid)
+  for id, typ in vim.fs.dir(root) do
+    local dir = vim.fs.joinpath(root, id)
+    if typ == "directory" and util.uv.fs_stat(vim.fs.joinpath(dir, lock)) then
+      local text = util.read_file(vim.fs.joinpath(dir, "workspace.yaml"))
+      if not text then
+        return nil
+      end
+      local ws = parse_workspace(text)
+      if ws.user_named == "true" and ws.name then
+        return ws.name
+      end
+      return ws.summary or ws.name or (ws.id or id):sub(1, 8)
+    end
+  end
+end
+
 local function enabled(agent)
   return config.options.agents[agent] ~= false
 end
@@ -348,6 +415,9 @@ local function build(p, agent, reg, owner, child, jobs)
     updated = reg and tonumber(reg.statusUpdatedAt or reg.updatedAt) or 0,
     reachable = false,
   }
+  if agent == "copilot" and not s.name then
+    s.name = copilot_name(p.pid)
+  end
   s.branch = util.git_branch(s.cwd)
   local host = owner and HOSTS[owner.comm]
   if not host then

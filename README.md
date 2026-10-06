@@ -130,7 +130,7 @@ relay.nvim  ~/projects/relay.nvim  [main]  · codex  zellij agents/3
 docs  ~/code/docs  [main]  · copilot  kitty window 4
 ```
 
-Only Claude Code publishes busy/idle, so Codex and Copilot sessions show just the agent. With one session it's used directly; with several you pick (the one you used last and the one working on the current project come first). `<leader>at` pins a session so sends go straight there until it exits.
+The name is the session's own: Claude's session name, or for Copilot what you set with `/rename` (read from `$COPILOT_HOME`, default `~/.copilot`); otherwise the project folder. Only Claude Code publishes busy/idle, so Codex and Copilot sessions show just the agent. With one session it's used directly; with several you pick (the one you used last and the one working on the current project come first). `<leader>at` pins a session so sends go straight there until it exits.
 
 ## Commands
 
