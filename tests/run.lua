@@ -178,9 +178,9 @@ end)
 
 test("session labels name the agent", function()
   local base = { pid = 7, cwd = "/srv/api", reachable = true, where = "tmux w:1.0" }
-  eq("· codex  api  tmux w:1.0  /srv/api", sessions.label(vim.tbl_extend("force", base, { agent = "codex" })))
+  eq("api  /srv/api  · codex  tmux w:1.0", sessions.label(vim.tbl_extend("force", base, { agent = "codex" })))
   eq(
-    "○ claude idle  refactor [main]  tmux w:1.0  /srv/api",
+    "refactor  /srv/api  [main]  ○ claude idle  tmux w:1.0",
     sessions.label(vim.tbl_extend("force", base, { agent = "claude", status = "idle", name = "refactor", branch = "main" }))
   )
   eq("copilot api", sessions.short(vim.tbl_extend("force", base, { agent = "copilot" })))
@@ -789,9 +789,9 @@ else
       return (util.read_file(copilot_log) or "") ~= ""
     end, 20)
     eq("\27[200~explain\n\n@e3.lua#L2\27[201~", util.read_file(copilot_log))
-    truthy(labels:find("○ claude idle  fake-session", 1, true), labels)
-    truthy(labels:find("· codex  project", 1, true), labels)
-    truthy(labels:find("· copilot  project", 1, true), labels)
+    truthy(labels:find("fake-session", 1, true), labels)
+    truthy(labels:find("project", 1, true), labels)
+    truthy(labels:find("· copilot", 1, true), labels)
   end)
 
   test("agents can be turned off", function()

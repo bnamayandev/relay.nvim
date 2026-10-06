@@ -121,13 +121,13 @@ By default the text waits in the agent's prompt and Relay switches to that pane 
 
 ### Choosing the session
 
-When you send, Relay lists the running sessions of every agent:
+When you send, Relay lists the running sessions of every agent, each as session name, root directory, branch, then agent and terminal:
 
 ```
-○ claude idle  api-refactor [feat/cache]  tmux work:2.1  ~/code/api-wt-cache
-● claude busy  relay-nvim [main]  nvim terminal #12  ~/projects/relay.nvim
-· codex  relay.nvim [main]  zellij agents/3  ~/projects/relay.nvim
-· copilot  docs [main]  kitty window 4  ~/code/docs
+api-refactor  ~/code/api-wt-cache  [feat/cache]  ○ claude idle  tmux work:2.1
+relay-nvim  ~/projects/relay.nvim  [main]  ● claude busy  nvim terminal #12
+relay.nvim  ~/projects/relay.nvim  [main]  · codex  zellij agents/3
+docs  ~/code/docs  [main]  · copilot  kitty window 4
 ```
 
 Only Claude Code publishes busy/idle, so Codex and Copilot sessions show just the agent. With one session it's used directly; with several you pick (the one you used last and the one working on the current project come first). `<leader>at` pins a session so sends go straight there until it exits.

@@ -186,10 +186,10 @@ different tty. A session in tmux inside zellij is therefore reached through
 tmux, never through the outer layers.
 
 With one session it is used directly. With several, a |vim.ui.select()|
-picker lists them, each with its agent: >
-    ○ claude idle  api-refactor [main]  tmux work:2.1  ~/code/api
-    · codex  relay.nvim [main]  zellij agents/3  ~/projects/relay.nvim
-    · copilot  docs [main]  kitty window 4  ~/code/docs
+picker lists them, each as name, root directory, branch, then agent: >
+    api-refactor  ~/code/api  [main]  ○ claude idle  tmux work:2.1
+    relay.nvim  ~/projects/relay.nvim  [main]  · codex  zellij agents/3
+    docs  ~/code/docs  [main]  · copilot  kitty window 4
 <
 Only Claude Code publishes busy/idle. The last used session and those working
 on the current project come first. Pin one with <leader>at to skip the picker

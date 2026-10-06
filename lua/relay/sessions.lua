@@ -450,8 +450,8 @@ function M.short(s)
   return s.agent .. " " .. display_name(s)
 end
 
---- One line for pickers, most telling parts first:
---- "○ claude idle  api-refactor [feat/x]  tmux main:1.0  ~/code/api-wt"
+--- One line for pickers: name, root directory, branch, then the rest:
+--- "api-refactor  ~/code/api-wt  [feat/x]  ○ claude idle  tmux main:1.0"
 ---@param s relay.Session
 function M.label(s)
   -- Codex and Copilot don't publish busy/idle, so they only show the agent
@@ -459,14 +459,18 @@ function M.label(s)
   if s.status then
     agent = agent .. " " .. s.status .. (s.waiting_for and (":" .. s.waiting_for) or "")
   end
-  local title = display_name(s) .. (s.branch and (" [" .. s.branch .. "]") or "")
   local where = (s.where or s.host or "unknown terminal") .. (s.reachable and "" or " ⊘")
-  local parts = { (STATUS_ICON[s.status] or "·") .. " " .. agent, title, where }
-  if s.title then
-    parts[#parts + 1] = "“" .. util.truncate(s.title, 32) .. "”"
-  end
+  local parts = { display_name(s) }
   if s.cwd then
     parts[#parts + 1] = util.truncate_left(util.home(s.cwd), 40)
+  end
+  if s.branch then
+    parts[#parts + 1] = "[" .. s.branch .. "]"
+  end
+  parts[#parts + 1] = (STATUS_ICON[s.status] or "·") .. " " .. agent
+  parts[#parts + 1] = where
+  if s.title then
+    parts[#parts + 1] = "“" .. util.truncate(s.title, 32) .. "”"
   end
   if not s.reachable then
     parts[#parts + 1] = "— clipboard only: " .. (s.reason or "can't be reached")
