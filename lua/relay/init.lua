@@ -114,7 +114,8 @@ end
 M._queued = queued
 
 --- Action menu for the visual selection (or a command range), or the cursor line when
---- nothing is selected: add to queue, add with context, send it, send the queue, view queue.
+--- nothing is selected: add to queue, add the file, add with context, send it, send the
+--- queue, view queue.
 ---@param range? { range: integer, line1: integer, line2: integer }
 function M.menu(range)
   init()
@@ -133,6 +134,7 @@ function M.menu(range)
     local row = vim.api.nvim_win_get_cursor(0)[1]
     data = capture.lines(row, row)
   end
+  local file, file_err = capture.file()
   local existing, index = queue.find(data)
   local what = label(data)
   local count = queue.count()
@@ -155,6 +157,15 @@ function M.menu(range)
         action = function()
           local i, existed = queue.add(data)
           queued(i, data, existed)
+        end,
+      },
+      {
+        key = "A",
+        label = "Add file",
+        disabled = file_err,
+        action = function()
+          local i, existed = queue.add(file)
+          queued(i, file, existed)
         end,
       },
       {

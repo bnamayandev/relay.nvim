@@ -2,7 +2,7 @@
 
 Send code from Neovim straight into the prompt of a running [Claude Code](https://claude.com/claude-code), [Codex](https://github.com/openai/codex) or [GitHub Copilot CLI](https://github.com/github/copilot-cli) session — or collect a queue of snippets, annotate them, and send them all at once. Built for working with several agents in parallel: every send looks up the live sessions at that moment and lets you pick one, whichever agent it is.
 
-- **One menu, `<leader>aq`**: on a selection (or the cursor line) — add to queue, add with context, send it to your agent, send the whole queue, view the queue.
+- **One menu, `<leader>aq`**: on a selection (or the cursor line) — add to queue, add the whole file, add with context, send it to your agent, send the whole queue, view the queue.
 - **One message for every agent**: saved code goes as `@src/app.ts#L10-24` (the agent reads exactly those lines), the same for Claude, Codex and Copilot. Code that only exists in Neovim (unsaved changes, buffers without a file) is inlined as a fenced block.
 - **Queue**: add any number of snippets from any files, give each its context, reorder, delete, preview the exact message, undo deletions.
 - **Live session discovery**: every running `claude`, `codex` and `copilot` on the machine, with its cwd and git branch (and for Claude its name and busy/idle status), wherever it runs: a Neovim terminal (this one or another instance), tmux, zellij, kitty or WezTerm.
@@ -56,12 +56,13 @@ Default keymaps (all under `<leader>a`, change or disable them in `opts.keymaps`
 | Key | Action |
 | --- | --- |
 | `a` | **Add to queue** |
+| `A` | **Add file**: the whole file, as its path with no line numbers |
 | `c` | **Add with context** (**Edit context** if it's already queued) |
 | `s` | **Send line** / **Send selection**: just this, to your agent — asks for an optional prompt first |
 | `S` | **Send queue (n)**: the whole queue — asks for an optional prompt first |
 | `v` | **View queue (n)** — delete entries with `x` |
 
-Also `1`–`5`, or move with `j`/`k` and press `⏎`. In the prompt box `⏎` sends; leave it empty to send without a prompt.
+Also `1`–`6`, or move with `j`/`k` and press `⏎`. In the prompt box `⏎` sends; leave it empty to send without a prompt.
 
 ### Overlay
 

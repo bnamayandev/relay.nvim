@@ -118,12 +118,13 @@ MENU                                                               *relay-menu*
 cursor line in normal mode (`:Relay` does the same):
 
   a  Add to queue
+  A  Add file           the whole file, as its path with no line numbers
   c  Add with context   (Edit context when it's already queued)
   s  Send line          or Send selection: just this, after an optional prompt
   S  Send queue (n)     the whole queue, after an optional prompt
   v  View queue (n)     delete entries with x
 
-Also 1-5, or j/k and <CR>. A snippet's context is sent in front of it as
+Also 1-6, or j/k and <CR>. A snippet's context is sent in front of it as
 "context: @path#L10". The prompt goes before everything else; leave it empty
 to send without one.
 
