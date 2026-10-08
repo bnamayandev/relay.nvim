@@ -33,6 +33,7 @@ local M = {}
 ---@field title string|nil        terminal title, when known
 ---@field reachable boolean
 ---@field reason string|nil       why the session can't be reached
+---@field fresh boolean|nil        just started by Relay and only guessed to be ready (see relay.launch)
 
 -- name of the process that owns a session's terminal -> backend
 local HOSTS = {

@@ -21,13 +21,17 @@ function M.check()
   end
 
   health.start("relay.nvim: agents")
+  local launch = require("relay.launch")
   for _, a in ipairs(agents.list) do
+    local exe = launch.program(a.id)
     if config.options.agents[a.id] == false then
       health.info(a.label .. ": disabled in `agents`")
-    elseif vim.fn.executable(a.id) == 1 then
-      health.ok(("%s: `%s` found: %s"):format(a.label, a.id, vim.fn.exepath(a.id)))
+    elseif not exe then
+      health.info(a.label .. ": not offered when no session is running (`launch`)")
+    elseif vim.fn.executable(exe) == 1 then
+      health.ok(("%s: `%s` found: %s (can be started)"):format(a.label, exe, vim.fn.exepath(exe)))
     else
-      health.info(("%s: `%s` is not on PATH (only needed to start sessions)"):format(a.label, a.id))
+      health.info(("%s: `%s` is not on PATH (only needed to start sessions)"):format(a.label, exe))
     end
   end
 

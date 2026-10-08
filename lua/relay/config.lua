@@ -12,6 +12,10 @@ local M = {}
 ---@field target string|false   normal: pin (or unpin) the session sends go to
 ---@field sessions string|false normal: jump to a running agent session
 
+---@class relay.Launch
+---@field split "left"|"right"|"above"|"below"|"tab"  where the agent's terminal opens
+---@field cmd table<string, string|string[]|false>   command per agent; false: don't offer it
+
 ---@class relay.Config
 ---@field keymaps relay.Keymaps|false
 ---@field format "auto"|"ref"|"inline"
@@ -23,6 +27,7 @@ local M = {}
 ---@field submit_delay integer
 ---@field claude_dir string|nil
 ---@field agents table<string, boolean>
+---@field launch relay.Launch|false
 ---@field backends table<string, boolean>
 ---@field signs boolean
 ---@field virtual_text boolean
@@ -61,6 +66,12 @@ local defaults = {
   claude_dir = nil,
   -- Which agents' sessions to list. Every agent gets the same message.
   agents = { claude = true, codex = true, copilot = true },
+  -- While no session is open in this Neovim, the picker also offers to start one of the
+  -- installed agents in a Neovim terminal; the message goes to it once it's ready. false: never.
+  launch = {
+    split = "left", -- "left" | "right" | "above" | "below" | "tab"
+    cmd = { claude = { "claude" }, codex = { "codex" }, copilot = { "copilot" } },
+  },
   -- Where sessions can be reached. Disable a backend to ignore sessions hosted by it.
   backends = { nvim = true, tmux = true, zellij = true, kitty = true, wezterm = true },
   -- Mark queued lines in the sign column.
@@ -79,6 +90,7 @@ local defaults = {
 M.options = vim.deepcopy(defaults)
 
 local FORMATS = { auto = true, ref = true, inline = true }
+local SPLITS = { right = true, left = true, above = true, below = true, tab = true }
 
 ---@param opts relay.Config|table|nil
 function M.setup(opts)
@@ -90,6 +102,13 @@ function M.setup(opts)
       vim.log.levels.WARN
     )
     M.options.format = "auto"
+  end
+  if M.options.launch and not SPLITS[M.options.launch.split] then
+    vim.notify(
+      ("relay.nvim: invalid launch.split %q, using \"left\""):format(tostring(M.options.launch.split)),
+      vim.log.levels.WARN
+    )
+    M.options.launch.split = "left"
   end
   return M.options
 end

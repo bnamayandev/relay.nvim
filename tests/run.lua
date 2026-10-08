@@ -844,6 +844,190 @@ else
     truthy(found.copilot, "copilot still listed")
   end)
 
+  -- starting a session when none is running ----------------------------------------------
+
+  local config = require("relay.config")
+  local state = require("relay.state")
+
+  local function fake_cmd(log)
+    return { tmp .. "/bin/claude", root .. "/tests/fake_claude.py", log }
+  end
+  local function fake_codex_cmd(log)
+    return { tmp .. "/bin/node", tmp .. "/bin/codex", tmp .. "/native/codex", root .. "/tests/fake_claude.py", log }
+  end
+
+  --- Run `fn` as if no session were running except those whose command line contains
+  --- `marker`, with `cmd` as the launch commands; stop the sessions it started afterwards.
+  local function no_sessions(marker, cmd, fn)
+    local real, launch = sessions.discover, vim.deepcopy(config.options.launch)
+    sessions.discover = function(cb)
+      real(function(list)
+        cb(vim.tbl_filter(function(s)
+          local cmdline = (util.read_file("/proc/" .. s.pid .. "/cmdline") or ""):gsub("%z", " ")
+          return cmdline:find(marker, 1, true) ~= nil
+        end, list))
+      end)
+    end
+    if cmd then
+      config.options.launch.cmd = cmd
+    else
+      config.options.launch = false
+    end
+    local before = vim.api.nvim_list_bufs()
+    local ok, err = pcall(fn)
+    sessions.discover, config.options.launch = real, launch
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if not vim.tbl_contains(before, buf) and vim.bo[buf].buftype == "terminal" then
+        pcall(vim.api.nvim_buf_delete, buf, { force = true })
+      end
+    end
+    if not ok then
+      error(err, 0)
+    end
+  end
+
+  --- Stub vim.ui.select: pick the entry starting `agent`; returns the labels it was shown.
+  local function pick_start(agent)
+    local seen = {}
+    vim.ui.select = function(entries, opts, cb)
+      seen.labels = vim.tbl_map(opts.format_item, entries)
+      seen.prompt = opts.prompt
+      for _, e in ipairs(entries) do
+        if e.launch and e.launch.id == agent then
+          return cb(e)
+        end
+      end
+      cb(nil)
+    end
+    return seen
+  end
+
+  test("with no session running, the picked agent is started and the message follows", function()
+    local log = tmp .. "/launch-claude.log"
+    local cmd = { claude = fake_cmd(log), codex = fake_codex_cmd(tmp .. "/unused.log"), copilot = false }
+    vim.env.FAKE_REGISTRY = tmp .. "/claude/sessions"
+    no_sessions(log, cmd, function()
+      local seen = pick_start("claude")
+      open_file("l1.lua")
+      vim.api.nvim_win_set_cursor(0, { 2, 0 })
+      in_visual("V", relay.add)
+      relay.send({ message = "explain", submit = true })
+      vim.wait(5000, function()
+        return (util.read_file(log) or ""):find("\r", 1, true) ~= nil
+      end, 20)
+      local where = util.home(vim.fn.getcwd())
+      eq({ "󰐕  Start Claude Code in Neovim  " .. where, "󰐕  Start Codex in Neovim  " .. where, "󰆏  Copy to clipboard" }, seen.labels)
+      -- Claude registered itself, so its prompt is up and Enter is pressed as asked
+      eq("\27[200~explain\n\n@l1.lua#L2\27[201~\r", util.read_file(log))
+      eq(0, queue.count())
+      eq("terminal", vim.bo.buftype, "the new session is focused")
+      eq(1, vim.fn.winnr(), "it opened on the far left")
+    end)
+    vim.env.FAKE_REGISTRY = nil
+  end)
+
+  test("with sessions only outside this Neovim, starting one is offered next to them", function()
+    no_sessions(remote_log, { claude = fake_cmd(tmp .. "/unused.log"), codex = false, copilot = false }, function()
+      local seen = {}
+      vim.ui.select = function(entries, opts, cb)
+        seen.labels = vim.tbl_map(opts.format_item, entries)
+        seen.prompt = opts.prompt
+        for _, e in ipairs(entries) do
+          if e.session then
+            return cb(e)
+          end
+        end
+        cb(nil)
+      end
+      vim.fn.writefile({}, remote_log)
+      relay.send({ message = "to the other neovim" })
+      vim.wait(3000, function()
+        return (util.read_file(remote_log) or "") ~= ""
+      end, 20)
+      truthy(seen.labels, "the picker opened although only one session runs")
+      truthy(seen.labels[1]:find("Start Claude Code", 1, true), seen.labels[1])
+      truthy(seen.labels[2]:find("nvim (pid", 1, true), seen.labels[2])
+      truthy(seen.prompt:find("none is open in Neovim", 1, true), seen.prompt)
+      eq("\27[200~to the other neovim\27[201~", util.read_file(remote_log))
+    end)
+  end)
+
+  test("a session open in this Neovim is used as before, without offering to start one", function()
+    no_sessions(local_log, { claude = fake_cmd(tmp .. "/unused.log"), codex = false, copilot = false }, function()
+      local seen = pick_start("claude")
+      vim.fn.writefile({}, local_log)
+      relay.send({ message = "straight there" })
+      vim.wait(3000, function()
+        return (util.read_file(local_log) or "") ~= ""
+      end, 20)
+      eq(nil, seen.labels, "no picker")
+      eq("\27[200~straight there\27[201~", util.read_file(local_log))
+    end)
+  end)
+
+  test("a startup screen is answered first; Enter is never pressed for a guessed-ready session", function()
+    local log = tmp .. "/launch-codex.log"
+    vim.env.FAKE_DIALOG = "1"
+    no_sessions(log, { claude = false, codex = fake_codex_cmd(log), copilot = false }, function()
+      pick_start("codex")
+      open_file("l2.lua")
+      vim.api.nvim_win_set_cursor(0, { 1, 0 })
+      in_visual("V", relay.add)
+      relay.send({ message = "explain", submit = true })
+      vim.wait(1500)
+      eq(nil, util.read_file(log), "nothing typed into the startup screen")
+      eq("terminal", vim.bo.buftype, "the new session is focused")
+      vim.api.nvim_chan_send(vim.bo.channel, "\r") -- the user answers it
+      vim.wait(5000, function()
+        return (util.read_file(log) or "") ~= ""
+      end, 20)
+      vim.wait(300)
+      eq("\27[200~explain\n\n@l2.lua#L1 \27[201~", util.read_file(log))
+    end)
+    vim.env.FAKE_DIALOG = nil
+  end)
+
+  test("a started session that exits before it's ready leaves the message on the clipboard", function()
+    local cmd = { claude = { tmp .. "/bin/claude", "-c", "import time; time.sleep(0.3)  # launch-exit" } }
+    no_sessions("launch-exit", cmd, function()
+      pick_start("claude")
+      vim.fn.setreg('"', "")
+      relay.send({ message = "explain this" })
+      vim.wait(5000, function()
+        return vim.fn.getreg('"') ~= ""
+      end, 20)
+      eq("explain this", vim.fn.getreg('"'))
+    end)
+  end)
+
+  test("pinning with no session running starts one and pins it", function()
+    local log = tmp .. "/launch-pin.log"
+    no_sessions(log, { claude = fake_cmd(log), codex = false, copilot = false }, function()
+      local seen = pick_start("claude")
+      relay.target()
+      vim.wait(5000, function()
+        return state.pinned ~= nil
+      end, 20)
+      eq("Pin session · none is running, start one", seen.prompt)
+      truthy(state.pinned, "pinned")
+      eq("claude project", state.pinned.label)
+      state.pinned = nil
+    end)
+  end)
+
+  test("with launch = false nothing is started and the message is copied", function()
+    no_sessions("launch-none", nil, function()
+      local seen = pick_start("claude")
+      vim.fn.setreg('"', "")
+      relay.send({ message = "copy me" })
+      vim.wait(2000, function()
+        return vim.fn.getreg('"') ~= ""
+      end, 20)
+      eq(nil, seen.labels, "no picker")
+      eq("copy me", vim.fn.getreg('"'))
+    end)
+  end)
+
   remote:kill(15)
 end
 

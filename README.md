@@ -6,6 +6,7 @@ Send code from Neovim straight into the prompt of a running [Claude Code](https:
 - **One message for every agent**: saved code goes as `@src/app.ts#L10-24` (the agent reads exactly those lines), the same for Claude, Codex and Copilot. Code that only exists in Neovim (unsaved changes, buffers without a file) is inlined as a fenced block.
 - **Queue**: add any number of snippets from any files, give each its context, reorder, delete, preview the exact message, undo deletions.
 - **Live session discovery**: every running `claude`, `codex` and `copilot` on the machine, with its cwd and git branch (and for Claude its name and busy/idle status), wherever it runs: a Neovim terminal (this one or another instance), tmux, zellij, kitty or WezTerm.
+- **No agent open in Neovim?** Pick one to start in a terminal split; the message goes to it as soon as it's ready.
 - **Snippets follow your code**: line numbers track edits, and when an agent rewrites the file on disk the snippet is found again by its content.
 
 ## Requirements
@@ -132,6 +133,22 @@ docs  ~/code/docs  [main]  · copilot  kitty window 4
 
 The name is the session's own: Claude's session name, or for Copilot what you set with `/rename` (read from `$COPILOT_HOME`, default `~/.copilot`); otherwise the project folder. Only Claude Code publishes busy/idle, so Codex and Copilot sessions show just the agent. With one session it's used directly; with several you pick (the one you used last and the one working on the current project come first). `<leader>at` pins a session so sends go straight there until it exits.
 
+### Starting a session
+
+While no agent session is open in this Neovim, sending (or pinning, or jumping) always asks, and the picker starts with every installed agent you can open here. Sessions running elsewhere are still listed after them:
+
+```
+Send to session · none is open in Neovim
+󰐕  Start Claude Code in Neovim  ~/projects/relay.nvim
+󰐕  Start Codex in Neovim  ~/projects/relay.nvim
+api-refactor  ~/code/api-wt-cache  [feat/cache]  ○ claude idle  tmux work:2.1
+󰆏  Copy to clipboard
+```
+
+The agent opens in a terminal split on the left, in the current directory, and your message is delivered once it's ready, so you can keep working. It's a normal session that keeps running after the send. Once a session is open in Neovim, sending works as described above. To keep sending to a session outside Neovim without the picker, pin it.
+
+Some agents show a startup screen first, like Claude's "trust this folder?" or Codex's update notice. Relay waits until you've answered it, since pressing Enter there would pick an option such as "No, exit". Claude Code reports when its prompt is up, so with `submit = true` Relay presses Enter for you. Codex and Copilot don't report this, so Relay waits for their output to settle and leaves the message in the prompt for you to press Enter the first time. If the agent exits before it's ready, the message goes to the clipboard.
+
 ## Commands
 
 ```
@@ -165,6 +182,10 @@ require("relay").setup({
   submit_delay = 80,        -- ms between paste and Enter
   claude_dir = nil,         -- default: $CLAUDE_CONFIG_DIR or ~/.claude
   agents = { claude = true, codex = true, copilot = true }, -- false: ignore that agent's sessions
+  launch = {                -- offer to start an agent while none is open in Neovim (false: never)
+    split = "left",         -- "left" | "right" | "above" | "below" | "tab"
+    cmd = { claude = { "claude" }, codex = { "codex" }, copilot = { "copilot" } }, -- false: don't offer it
+  },
   backends = { nvim = true, tmux = true, zellij = true, kitty = true, wezterm = true },
   signs = true,             -- mark queued lines in the sign column
   virtual_text = true,      -- "󰚩 #2 context" after the first queued line
