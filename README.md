@@ -118,7 +118,7 @@ Claude Code, Codex and Copilot all get this same text. The prompt comes first, t
 
 Codex gets one extra space at the end. Without it, a message that ends in a mention leaves Codex's file search popup open, and that popup would take the Enter meant to submit.
 
-By default the text waits in the agent's prompt and Relay switches to that pane so you can add to it; with `submit = true` (or `<C-s>` in the overlay) Enter is pressed for you and you stay in Neovim.
+By default Relay presses Enter for you and you stay in Neovim. With `submit = false` the text waits in the agent's prompt instead, and Relay switches to that pane so you can add to it (`<C-s>` in the overlay still submits).
 
 ### Choosing the session
 
@@ -135,15 +135,18 @@ The name is the session's own: Claude's session name, or for Copilot what you se
 
 ### Starting a session
 
-While no agent session is open in this Neovim, sending (or pinning, or jumping) always asks, and the picker starts with every installed agent you can open here. Sessions running elsewhere are still listed after them:
+The session picker (for sending, pinning and jumping) ends with **New agent…**, shown in yellow when your picker supports highlights (snacks.nvim does). Choosing it lists the installed agents to start one of them in Neovim:
 
 ```
 Send to session · none is open in Neovim
-󰐕  Start Claude Code in Neovim  ~/projects/relay.nvim
-󰐕  Start Codex in Neovim  ~/projects/relay.nvim
 api-refactor  ~/code/api-wt-cache  [feat/cache]  ○ claude idle  tmux work:2.1
 󰆏  Copy to clipboard
+󰐕  New agent…                      →   󰐕  Claude Code
+                                        󰐕  Codex
+                                        󰐕  Copilot
 ```
+
+With no session running anywhere, the agents are listed right away instead. While no session is open in this Neovim, Relay always shows the picker, even for a single session elsewhere.
 
 The agent opens in a narrow terminal split on the right (35% of the width), in the current directory, and your message is delivered once it's ready, so you can keep working. It's a normal session that keeps running after the send. Once a session is open in Neovim, sending works as described above. To keep sending to a session outside Neovim without the picker, pin it.
 
@@ -174,7 +177,7 @@ require("relay").setup({
     target = "<leader>at", sessions = "<leader>aj",
   }, -- or false; set a single key to false to skip it
   format = "auto",          -- "auto" | "ref" (@mention) | "inline" (code block)
-  submit = false,           -- press Enter after pasting
+  submit = true,            -- press Enter after pasting (false: leave it in the prompt)
   focus = "auto",           -- switch to the agent's pane: true | false | "auto" (when not submitting)
   clear_on_send = true,     -- empty the queue after sending (:Relay restore brings it back)
   diagnostics = false,      -- include LSP diagnostics by default
@@ -206,7 +209,7 @@ The `User RelayQueueChanged` autocmd fires whenever the queue changes.
 
 ### Highlights
 
-`RelayTitle`, `RelayFooter`, `RelayKey`, `RelayMuted`, `RelayIndex`, `RelayPath`, `RelayMode`, `RelayNote`, `RelayWarn`, `RelaySign`, `RelayVirtText` — all linked to standard groups by default.
+`RelayTitle`, `RelayFooter`, `RelayKey`, `RelayMuted`, `RelayIndex`, `RelayPath`, `RelayMode`, `RelayNote`, `RelayWarn`, `RelaySign`, `RelayVirtText`, `RelayNewAgent` — all linked to standard groups by default.
 
 ## How sessions are found
 

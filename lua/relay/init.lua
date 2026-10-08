@@ -15,6 +15,7 @@ local HIGHLIGHTS = {
   RelayWarn = "DiagnosticWarn",
   RelaySign = "DiagnosticInfo",
   RelayVirtText = "Comment",
+  RelayNewAgent = "DiagnosticWarn",
 }
 
 local function set_highlights()

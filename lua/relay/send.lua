@@ -19,16 +19,47 @@ local function copy(text, why)
   end
 end
 
+--- Entries that start an agent are highlighted in pickers that take highlighted chunks (snacks
+--- calls `format_item(item, true)`); others get the plain text.
+local function highlight_new(text, chunks)
+  if chunks == true then
+    return { { text, "RelayNewAgent" } }
+  end
+  return text
+end
+
+---@alias relay.Choice { session?: relay.Session, launch?: relay.Agent, clipboard?: boolean, unpin?: boolean }
+
+--- Second step of "New agent…": which installed agent to start.
+---@param agents relay.Agent[]
+---@param cb fun(choice: relay.Choice|nil)
+local function pick_agent(agents, cb)
+  vim.ui.select(agents, {
+    prompt = "Start in Neovim · " .. util.home(vim.fn.getcwd()),
+    kind = "relay.agent",
+    format_item = function(a, chunks)
+      return highlight_new("󰐕  " .. a.label, chunks)
+    end,
+  }, function(a)
+    cb(a and { launch = a } or nil)
+  end)
+end
+
+--- With sessions to choose from, the agents in `opts.launch` fold into one "New agent…" entry
+--- at the bottom that expands into them; without, they are listed right away.
 ---@param list relay.Session[]
 ---@param opts { prompt?: string, clipboard?: boolean, unpin?: boolean, launch?: relay.Agent[] }
----@param cb fun(choice: { session?: relay.Session, launch?: relay.Agent, clipboard?: boolean, unpin?: boolean }|nil)
+---@param cb fun(choice: relay.Choice|nil)
 function M.pick(list, opts, cb)
+  local agents = opts.launch or {}
   local entries = {}
-  for _, a in ipairs(opts.launch or {}) do
-    entries[#entries + 1] = { launch = a }
-  end
   for _, s in ipairs(list) do
     entries[#entries + 1] = { session = s }
+  end
+  if #list == 0 then
+    for _, a in ipairs(agents) do
+      entries[#entries + 1] = { launch = a }
+    end
   end
   if opts.clipboard then
     entries[#entries + 1] = { clipboard = true }
@@ -36,12 +67,17 @@ function M.pick(list, opts, cb)
   if opts.unpin then
     entries[#entries + 1] = { unpin = true }
   end
+  if #list > 0 and #agents > 0 then
+    entries[#entries + 1] = { new = true }
+  end
   vim.ui.select(entries, {
     prompt = opts.prompt or "Send to session",
     kind = "relay.session",
-    format_item = function(e)
-      if e.launch then
-        return ("󰐕  Start %s in Neovim  %s"):format(e.launch.label, util.home(vim.fn.getcwd()))
+    format_item = function(e, chunks)
+      if e.new then
+        return highlight_new("󰐕  New agent…", chunks)
+      elseif e.launch then
+        return highlight_new(("󰐕  Start %s in Neovim  %s"):format(e.launch.label, util.home(vim.fn.getcwd())), chunks)
       elseif e.clipboard then
         return "󰆏  Copy to clipboard"
       elseif e.unpin then
@@ -50,30 +86,36 @@ function M.pick(list, opts, cb)
       return sessions.label(e.session)
     end,
   }, function(choice)
+    if choice and choice.new then
+      return pick_agent(agents, cb)
+    end
     cb(choice)
   end)
 end
 
 local NO_SESSION = "No running agent session found (Claude Code, Codex, Copilot)"
 
---- The agents to offer starting: every installed one while no session is open in this Neovim
---- (sessions elsewhere are still listed next to them).
----@param list relay.Session[]
+--- Agents that can be started (see relay.launch), offered in every picker.
 ---@return relay.Agent[]
-local function startable(list)
-  for _, s in ipairs(list) do
-    if s.host == "nvim" then
-      return {}
-    end
-  end
+local function startable()
   return require("relay.launch").available()
 end
 
 ---@param list relay.Session[]
----@param launch relay.Agent[]
+local function open_in_nvim(list)
+  for _, s in ipairs(list) do
+    if s.host == "nvim" then
+      return true
+    end
+  end
+  return false
+end
+
+---@param list relay.Session[]
+---@param agents relay.Agent[]
 ---@param what string
-local function prompt(list, launch, what)
-  if #launch == 0 then
+local function prompt(list, agents, what)
+  if #agents == 0 or open_in_nvim(list) then
     return what
   end
   return what .. (#list == 0 and " · none is running, start one" or " · none is open in Neovim")
@@ -87,8 +129,8 @@ local function start(agent, wait, cb)
   end)
 end
 
---- Decide where to send: the pinned session, the only session, or ask. While no session is
---- open in this Neovim, asking also offers to start one there.
+--- Decide where to send: the pinned session, the only session, or ask (the picker can also
+--- start a new agent). While no session is open in this Neovim, it always asks.
 ---@param opts { pick?: boolean }
 ---@param cb fun(target: relay.Session|false|nil, why: string|nil)  false = clipboard, nil = cancelled
 function M.resolve(opts, cb)
@@ -103,15 +145,15 @@ function M.resolve(opts, cb)
       queue.emit()
       util.warn(("Pinned session %s %s — unpinned"):format(pinned.label, s and "can't be reached" or "has ended"))
     end
-    local launch = startable(list)
-    if #list == 0 and #launch == 0 then
+    local agents = startable()
+    if #list == 0 and #agents == 0 then
       return cb(false, NO_SESSION)
     end
-    if #list == 1 and #launch == 0 and not opts.pick then
+    if #list == 1 and not opts.pick and (#agents == 0 or open_in_nvim(list)) then
       return cb(list[1])
     end
-    local title = prompt(list, launch, "Send to session")
-    M.pick(list, { prompt = title, launch = launch, clipboard = true }, function(choice)
+    local title = prompt(list, agents, "Send to session")
+    M.pick(list, { prompt = title, launch = agents, clipboard = true }, function(choice)
       if not choice then
         return cb(nil)
       end
@@ -212,12 +254,12 @@ end
 --- Pin the session sends go to (skips the picker), or unpin.
 function M.pin()
   sessions.discover(function(list)
-    local launch = startable(list)
-    if #list == 0 and #launch == 0 and not state.pinned then
+    local agents = startable()
+    if #list == 0 and #agents == 0 and not state.pinned then
       return util.warn(NO_SESSION)
     end
-    local title = prompt(list, launch, "Pin session")
-    M.pick(list, { prompt = title, unpin = state.pinned ~= nil, launch = launch }, function(choice)
+    local title = prompt(list, agents, "Pin session")
+    M.pick(list, { prompt = title, unpin = state.pinned ~= nil, launch = agents }, function(choice)
       if not choice then
         return
       end
@@ -244,11 +286,11 @@ end
 --- Pick a running session and switch to it.
 function M.jump()
   sessions.discover(function(list)
-    local launch = startable(list)
-    if #list == 0 and #launch == 0 then
+    local agents = startable()
+    if #list == 0 and #agents == 0 then
       return util.warn(NO_SESSION)
     end
-    M.pick(list, { prompt = prompt(list, launch, "Jump to session"), launch = launch }, function(choice)
+    M.pick(list, { prompt = prompt(list, agents, "Jump to session"), launch = agents }, function(choice)
       if choice and choice.launch then
         return require("relay.launch").start(choice.launch, { enter = true })
       end
