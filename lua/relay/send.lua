@@ -6,6 +6,7 @@ local queue = require("relay.queue")
 local format = require("relay.format")
 local sessions = require("relay.sessions")
 local transport = require("relay.transport")
+local picker = require("relay.ui.picker")
 
 local M = {}
 
@@ -20,7 +21,7 @@ local function copy(text, why)
 end
 
 --- Entries that start an agent are highlighted in pickers that take highlighted chunks (snacks
---- calls `format_item(item, true)`); others get the plain text.
+--- and telescope call `format_item(item, true)`); others get the plain text.
 local function highlight_new(text, chunks)
   if chunks == true then
     return { { text, "RelayNewAgent" } }
@@ -34,7 +35,7 @@ end
 ---@param agents relay.Agent[]
 ---@param cb fun(choice: relay.Choice|nil)
 local function pick_agent(agents, cb)
-  vim.ui.select(agents, {
+  picker.select(agents, {
     prompt = "Start in Neovim · " .. util.home(vim.fn.getcwd()),
     kind = "relay.agent",
     format_item = function(a, chunks)
@@ -70,7 +71,7 @@ function M.pick(list, opts, cb)
   if #list > 0 and #agents > 0 then
     entries[#entries + 1] = { new = true }
   end
-  vim.ui.select(entries, {
+  picker.select(entries, {
     prompt = opts.prompt or "Send to session",
     kind = "relay.session",
     format_item = function(e, chunks)

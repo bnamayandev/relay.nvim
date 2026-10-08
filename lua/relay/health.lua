@@ -20,6 +20,17 @@ function M.check()
     health.info("Not on Linux: sessions in zellij, kitty and remote Neovims can't be located; tmux, wezterm and Neovim terminals work")
   end
 
+  local picker = config.options.picker
+  if type(picker) == "function" then
+    health.ok("Picker: your own function")
+  elseif picker == "select" then
+    health.ok("Picker: vim.ui.select")
+  elseif require("relay.ui.picker").get(picker) then
+    health.ok("Picker: " .. picker)
+  else
+    health.warn(("Picker: %s isn't installed, vim.ui.select is used instead"):format(picker))
+  end
+
   health.start("relay.nvim: agents")
   local launch = require("relay.launch")
   for _, a in ipairs(agents.list) do

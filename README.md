@@ -133,9 +133,18 @@ docs  ~/code/docs  [main]  · copilot  kitty window 4
 
 The name is the session's own: Claude's session name, or for Copilot what you set with `/rename` (read from `$COPILOT_HOME`, default `~/.copilot`); otherwise the project folder. Only Claude Code publishes busy/idle, so Codex and Copilot sessions show just the agent. With one session it's used directly; with several you pick (the one you used last and the one working on the current project come first). `<leader>at` pins a session so sends go straight there until it exits.
 
+The list opens in `vim.ui.select` (or whatever your config replaced it with). To use a picker directly, set `picker` to `"snacks"`, `"telescope"`, `"fzf-lua"` or `"mini.pick"`, or to your own function called like `vim.ui.select`:
+
+```lua
+picker = function(items, opts, on_choice)
+  -- opts: prompt, kind ("relay.session" | "relay.agent"), format_item(item, chunks)
+  require("snacks").picker.select(items, vim.tbl_extend("force", opts, { snacks = { layout = { preset = "vscode" } } }), on_choice)
+end,
+```
+
 ### Starting a session
 
-The session picker (for sending, pinning and jumping) ends with **New agent…**, shown in yellow when your picker supports highlights (snacks.nvim does). Choosing it lists the installed agents to start one of them in Neovim:
+The session picker (for sending, pinning and jumping) ends with **New agent…**, shown in yellow when your picker supports highlights (snacks.nvim and telescope do). Choosing it lists the installed agents to start one of them in Neovim:
 
 ```
 Send to session · none is open in Neovim
@@ -190,6 +199,7 @@ require("relay").setup({
     size = 0.35,            -- fraction of the width (height for above/below), or columns/lines
     cmd = { claude = { "claude" }, codex = { "codex" }, copilot = { "copilot" } }, -- false: don't offer it
   },
+  picker = "select",        -- "select" (vim.ui.select) | "snacks" | "telescope" | "fzf-lua" | "mini.pick" | function
   backends = { nvim = true, tmux = true, zellij = true, kitty = true, wezterm = true },
   signs = true,             -- mark queued lines in the sign column
   virtual_text = true,      -- "󰚩 #2 context" after the first queued line

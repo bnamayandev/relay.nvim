@@ -71,6 +71,7 @@ Defaults: >lua
         cmd = { claude = { "claude" }, codex = { "codex" },
                 copilot = { "copilot" } },
       },
+      picker = "select",
       backends = { nvim = true, tmux = true, zellij = true, kitty = true,
                    wezterm = true },
       signs = true,
@@ -121,6 +122,16 @@ launch          Offer to start an agent while none is open in this Neovim
                 columns (lines). `cmd`: the command for each agent, a list or
                 a shell string; set one to `false` to not offer it, e.g.
                 `copilot = { "gh", "copilot" }` or `claude = false`.
+
+                                                               *relay-picker*
+picker          The picker for choosing a session or an agent to start.
+                "select": |vim.ui.select()|, or whatever your config replaced
+                it with. "snacks", "telescope", "fzf-lua", "mini.pick": that
+                picker (vim.ui.select when it isn't installed). Or a function
+                called like |vim.ui.select()|: `function(items, opts,
+                on_choice)`, where `opts.kind` is "relay.session" or
+                "relay.agent" and `opts.format_item(item, true)` returns
+                highlighted chunks for the entries that start an agent.
 
 backends        Turn off support for a terminal. Its sessions are then listed
                 as clipboard-only.
@@ -204,8 +215,8 @@ program that owns its terminal: the first ancestor process attached to a
 different tty. A session in tmux inside zellij is therefore reached through
 tmux, never through the outer layers.
 
-With one session it is used directly. With several, a |vim.ui.select()|
-picker lists them, each as name, root directory, branch, then agent: >
+With one session it is used directly. With several, a picker (see
+|relay-picker|) lists them, each as name, root directory, branch, then agent: >
     api-refactor  ~/code/api  [main]  ○ claude idle  tmux work:2.1
     relay.nvim  ~/projects/relay.nvim  [main]  · codex  zellij agents/3
     docs  ~/code/docs  [main]  · copilot  kitty window 4
@@ -230,7 +241,7 @@ kitty needs `allow_remote_control` and `listen_on` in kitty.conf.
 
                                                                 *relay-start*
 The session picker (for sending, pinning and jumping) ends with "New agent…"
-(`RelayNewAgent`, in pickers that support highlights such as snacks.nvim).
+(`RelayNewAgent`, in pickers that support highlights: snacks.nvim, telescope).
 Choosing it lists the installed agents (see |relay-launch|) to start one in
 Neovim. With no session running anywhere they are listed right away instead.
 While no session is open in this Neovim, the picker is shown even for a single

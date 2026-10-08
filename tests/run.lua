@@ -536,6 +536,89 @@ test("the menu works on a visual selection and opens the queue", function()
   feed("q")
 end)
 
+-- picker -------------------------------------------------------------------------------
+
+do
+  local config = require("relay.config")
+  local send = require("relay.send")
+  local other = { pid = 1, agent = "claude", tty = "x", updated = 0, reachable = false, reason = "test" }
+  local list_agents = { agents.list[1], agents.list[2] }
+
+  --- Run `fn` with `picker` set and vim.ui.select failing the test if it's called.
+  local function with_picker(picker, fn)
+    local saved, select = config.options.picker, vim.ui.select
+    config.options.picker = picker
+    vim.ui.select = function()
+      error("vim.ui.select was used")
+    end
+    local ok, err = pcall(fn)
+    config.options.picker, vim.ui.select = saved, select
+    assert(ok, err)
+  end
+
+  test("picker can be a function called like vim.ui.select", function()
+    local steps, choice = {}, nil
+    with_picker(function(items, opts, on_choice)
+      steps[#steps + 1] = { prompt = opts.prompt, kind = opts.kind, labels = vim.tbl_map(opts.format_item, items) }
+      on_choice(items[#items], #items) -- "New agent…", then the last agent
+    end, function()
+      send.pick({ other }, { prompt = "Pick one", launch = list_agents, clipboard = true }, function(c)
+        choice = c
+      end)
+    end)
+    eq(2, #steps)
+    eq("Pick one", steps[1].prompt)
+    eq("relay.session", steps[1].kind)
+    eq({ "󰆏  Copy to clipboard", "󰐕  New agent…" }, { steps[1].labels[2], steps[1].labels[3] })
+    eq("relay.agent", steps[2].kind)
+    eq({ "󰐕  " .. list_agents[1].label, "󰐕  " .. list_agents[2].label }, steps[2].labels)
+    eq(list_agents[2], choice.launch)
+  end)
+
+  test("a picker that isn't installed warns once and uses vim.ui.select", function()
+    local notify, warnings = vim.notify, {}
+    vim.notify = function(msg, level)
+      if level == vim.log.levels.WARN then
+        warnings[#warnings + 1] = msg
+      end
+    end
+    local saved, select = config.options.picker, vim.ui.select
+    config.options.picker = "telescope"
+    local shown = 0
+    vim.ui.select = function(items, _, on_choice)
+      shown = shown + 1
+      on_choice(items[1], 1)
+    end
+    local choices = {}
+    local ok, err = pcall(function()
+      for _ = 1, 2 do
+        send.pick({}, { launch = list_agents }, function(c)
+          choices[#choices + 1] = c
+        end)
+      end
+    end)
+    config.options.picker, vim.ui.select, vim.notify = saved, select, notify
+    assert(ok, err)
+    eq(2, shown)
+    eq(list_agents[1], choices[2].launch)
+    eq({ 'picker "telescope" isn\'t installed, using vim.ui.select' }, warnings)
+  end)
+
+  test("an invalid picker in setup falls back to vim.ui.select", function()
+    local notify, saved, warning = vim.notify, config.options, nil
+    vim.notify = function(msg)
+      warning = msg
+    end
+    local picked = config.setup({ picker = "fzf" }).picker
+    local fn = function() end
+    local custom = config.setup({ picker = fn }).picker
+    config.options, vim.notify = saved, notify
+    eq("select", picked)
+    truthy(warning and warning:find('invalid picker "fzf"', 1, true), tostring(warning))
+    eq(fn, custom)
+  end)
+end
+
 -- end to end ---------------------------------------------------------------------------
 
 local python = vim.fn.exepath("python3")

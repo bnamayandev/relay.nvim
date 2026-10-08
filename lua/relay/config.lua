@@ -29,6 +29,7 @@ local M = {}
 ---@field claude_dir string|nil
 ---@field agents table<string, boolean>
 ---@field launch relay.Launch|false
+---@field picker "select"|"snacks"|"telescope"|"fzf-lua"|"mini.pick"|relay.SelectFn
 ---@field backends table<string, boolean>
 ---@field signs boolean
 ---@field virtual_text boolean
@@ -74,6 +75,11 @@ local defaults = {
     size = 0.35, -- of the editor's width (height for above/below); >= 1: columns (lines)
     cmd = { claude = { "claude" }, codex = { "codex" }, copilot = { "copilot" } },
   },
+  -- Picker for choosing a session (or an agent to start):
+  --   "select"  -> vim.ui.select, or whatever your config replaced it with
+  --   "snacks" | "telescope" | "fzf-lua" | "mini.pick" -> that picker
+  --   function(items, opts, on_choice) -> your own, called like vim.ui.select
+  picker = "select",
   -- Where sessions can be reached. Disable a backend to ignore sessions hosted by it.
   backends = { nvim = true, tmux = true, zellij = true, kitty = true, wezterm = true },
   -- Mark queued lines in the sign column.
@@ -93,6 +99,7 @@ M.options = vim.deepcopy(defaults)
 
 local FORMATS = { auto = true, ref = true, inline = true }
 local SPLITS = { right = true, left = true, above = true, below = true, tab = true }
+local PICKERS = { select = true, snacks = true, telescope = true, ["fzf-lua"] = true, ["mini.pick"] = true }
 
 ---@param opts relay.Config|table|nil
 function M.setup(opts)
@@ -111,6 +118,13 @@ function M.setup(opts)
       vim.log.levels.WARN
     )
     M.options.launch.split = "right"
+  end
+  if type(M.options.picker) ~= "function" and not PICKERS[M.options.picker] then
+    vim.notify(
+      ("relay.nvim: invalid picker %q, using \"select\""):format(tostring(M.options.picker)),
+      vim.log.levels.WARN
+    )
+    M.options.picker = "select"
   end
   return M.options
 end
