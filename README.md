@@ -84,8 +84,7 @@ The context box is a normal buffer: `<C-j>` inserts a new line.
 
 | Key | Action |
 | --- | --- |
-| `s` / `S` | send / send to a chosen session |
-| `m` | write a prompt (goes first), then send the queue |
+| `s` / `S` | send / send to a chosen session (opens a prompt box first: ⏎ on an empty box sends without one) |
 | `e` `i` `a` | edit the snippet's context |
 | `x` `dd` | delete · `u` restores |
 | `K` / `J` | move up / down |

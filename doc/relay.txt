@@ -160,7 +160,8 @@ Keys in the queue window (<leader>aq in normal mode, or `:Relay`):
 
   s             send the queue
   S             send, choosing the session
-  m             write a prompt (goes first), then send the queue
+                (both open a prompt box first: type a prompt that goes at
+                the top, or just press <CR> to send without one)
   e i a         edit the snippet's context
   x dd          delete the snippet
   u             restore the last deleted snippet(s)

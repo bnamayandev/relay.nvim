@@ -14,16 +14,14 @@ local view
 local HINTS = {
   { "s", "send" },
   { "S", "send to…" },
-  { "m", "+prompt" },
   { "e", "context" },
   { "x", "delete" },
   { "?", "more" },
 }
 
 local HELP = {
-  { "s", "send the queue" },
-  { "S", "send, picking a session" },
-  { "m", "write a prompt (goes first), then send the queue" },
+  { "s", "send the queue (asks for an optional prompt first)" },
+  { "S", "send, picking a session (asks for an optional prompt first)" },
   { "e / i / a", "edit the snippet's context" },
   { "x / dd", "delete the snippet" },
   { "u", "restore the last deleted snippet(s)" },
@@ -301,12 +299,21 @@ local function jump()
   end
 end
 
+--- Ask for an optional prompt (it goes first; ⏎ on an empty box skips it), then send.
 local function send(opts)
   if queue.count() == 0 then
     return util.warn("Nothing to send: the queue is empty")
   end
-  M.close()
-  require("relay.send").send(opts)
+  view.suspended = true
+  require("relay.ui.input").open({
+    title = "Prompt (optional, goes first)",
+    submit_label = "send",
+    on_submit = function(text)
+      M.close()
+      require("relay.send").send(vim.tbl_extend("force", opts, { message = text }))
+    end,
+    on_cancel = resume,
+  })
 end
 
 --- Float showing exactly what the agent will receive.
@@ -503,21 +510,6 @@ function M.open()
   map("S", function()
     send({ pick = true })
   end, "Send to a chosen session")
-  map("m", function()
-    if queue.count() == 0 then
-      return util.warn("Nothing to send: the queue is empty")
-    end
-    view.suspended = true
-    require("relay.ui.input").open({
-      title = "Prompt (goes first)",
-      submit_label = "send",
-      on_submit = function(text)
-        M.close()
-        require("relay.send").send({ message = text })
-      end,
-      on_cancel = resume,
-    })
-  end, "Send with a prompt")
   map("C", function()
     local n = queue.clear()
     if n > 0 then
