@@ -12,7 +12,7 @@ vim.fn.mkdir(tmp .. "/claude/sessions", "p")
 vim.fn.chdir(tmp .. "/project")
 
 local relay = require("relay")
-relay.setup({ claude_dir = tmp .. "/claude", submit_delay = 30 })
+relay.setup({ claude_dir = tmp .. "/claude", submit = false, submit_delay = 30 })
 local util = require("relay.util")
 local proc = require("relay.proc")
 local queue = require("relay.queue")
@@ -687,7 +687,7 @@ else
       return (util.read_file(local_log) or "") ~= ""
     end, 20)
     eq("\27[200~explain\n\n@e1.lua#L2-3\27[201~", util.read_file(local_log))
-    truthy(labels[#labels]:find("clipboard", 1, true), "clipboard entry")
+    truthy(table.concat(labels, "\n"):find("Copy to clipboard", 1, true), "clipboard entry")
     eq(0, queue.count())
   end)
 
@@ -927,7 +927,7 @@ else
     vim.env.FAKE_REGISTRY = nil
   end)
 
-  test("with sessions only outside this Neovim, starting one is offered next to them", function()
+  test("with sessions only outside this Neovim, the picker opens with New agent at the bottom", function()
     no_sessions(remote_log, { claude = fake_cmd(tmp .. "/unused.log"), codex = false, copilot = false }, function()
       local seen = {}
       vim.ui.select = function(entries, opts, cb)
@@ -946,10 +946,55 @@ else
         return (util.read_file(remote_log) or "") ~= ""
       end, 20)
       truthy(seen.labels, "the picker opened although only one session runs")
-      truthy(seen.labels[1]:find("Start Claude Code", 1, true), seen.labels[1])
-      truthy(seen.labels[2]:find("nvim (pid", 1, true), seen.labels[2])
+      eq(3, #seen.labels)
+      truthy(seen.labels[1]:find("nvim (pid", 1, true), seen.labels[1])
+      eq({ "󰆏  Copy to clipboard", "󰐕  New agent…" }, { seen.labels[2], seen.labels[3] })
       truthy(seen.prompt:find("none is open in Neovim", 1, true), seen.prompt)
       eq("\27[200~to the other neovim\27[201~", util.read_file(remote_log))
+    end)
+  end)
+
+  test("New agent expands into the installed agents, highlighted, and starts the one picked", function()
+    local cmd = { claude = fake_cmd(tmp .. "/unused.log"), codex = fake_codex_cmd(tmp .. "/launch-new.log"), copilot = false }
+    no_sessions("launch-new.log", cmd, function()
+      local steps = {}
+      vim.ui.select = function(entries, opts, cb)
+        local step = { prompt = opts.prompt, labels = vim.tbl_map(opts.format_item, entries) }
+        steps[#steps + 1] = step
+        for _, e in ipairs(entries) do
+          if e.new then
+            step.chunks = opts.format_item(e, true)
+            return cb(e)
+          elseif e.id == "codex" then
+            step.chunks = opts.format_item(e, true)
+            return cb(e)
+          end
+        end
+        cb(nil)
+      end
+      -- a session elsewhere, so the agents fold into "New agent…"
+      local real = sessions.discover
+      sessions.discover = function(cb)
+        real(function(list)
+          if #list == 0 then
+            list = { { pid = 1, agent = "claude", tty = "x", updated = 0, reachable = false, reason = "test" } }
+          end
+          cb(list)
+        end)
+      end
+      local ok, err = pcall(function()
+        relay.sessions()
+        vim.wait(3000, function()
+          return #steps == 2 and vim.bo.buftype == "terminal"
+        end, 20)
+      end)
+      sessions.discover = real
+      assert(ok, err)
+      eq("󰐕  New agent…", steps[1].labels[#steps[1].labels])
+      eq({ { "󰐕  New agent…", "RelayNewAgent" } }, steps[1].chunks)
+      eq({ "󰐕  Claude Code", "󰐕  Codex" }, steps[2].labels)
+      eq({ { "󰐕  Codex", "RelayNewAgent" } }, steps[2].chunks)
+      eq("terminal", vim.bo.buftype, "the picked agent opened")
     end)
   end)
 

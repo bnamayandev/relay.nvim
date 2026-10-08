@@ -57,7 +57,7 @@ Defaults: >lua
         sessions = "<leader>aj", -- normal: jump to a session
       },
       format = "auto",
-      submit = false,
+      submit = true,
       focus = "auto",
       clear_on_send = true,
       diagnostics = false,
@@ -87,7 +87,8 @@ format          "ref": `@path#L10-20` mention. "inline": the code in a fenced
                 block. "auto": ref when the file is saved on disk, inline
                 otherwise. Can be overridden per snippet.
 
-submit          Press Enter in the agent after pasting.
+submit          Press Enter in the agent after pasting. false: the text
+                waits in the agent's prompt.
 
                                                                 *relay-focus*
 focus           Switch to the agent's pane/window after sending. "auto" does
@@ -228,12 +229,15 @@ list-clients`, types, and moves the focus back unless it should stay there
 kitty needs `allow_remote_control` and `listen_on` in kitty.conf.
 
                                                                 *relay-start*
-While no agent session is open in this Neovim, sending (and pinning, and
-jumping to a session) always asks, and the picker starts with the installed
-agents (see |relay-launch|); sessions running elsewhere follow them. The agent
-runs in a narrow terminal split on the right, in the current directory, and
-the message is sent once it's ready. The session keeps running afterwards like
-any other. Pin a session outside Neovim to send there without the picker.
+The session picker (for sending, pinning and jumping) ends with "New agent…"
+(`RelayNewAgent`, in pickers that support highlights such as snacks.nvim).
+Choosing it lists the installed agents (see |relay-launch|) to start one in
+Neovim. With no session running anywhere they are listed right away instead.
+While no session is open in this Neovim, the picker is shown even for a single
+session elsewhere. The agent runs in a narrow terminal split on the right, in
+the current directory, and the message is sent once it's ready. The session
+keeps running afterwards like any other. Pin a session outside Neovim to send
+there without the picker.
 
 Startup screens that wait for a key ("trust this folder?", Codex's update
 notice) are left for you to answer: Relay waits until they're gone, because
@@ -304,5 +308,6 @@ session changes.
   RelayWarn       snippets gone from the file  (DiagnosticWarn)
   RelaySign       sign of queued code          (DiagnosticInfo)
   RelayVirtText   "#n context" after queued    (Comment)
+  RelayNewAgent   "New agent…" in pickers      (DiagnosticWarn)
 
  vim:tw=78:ts=8:ft=help:norl:

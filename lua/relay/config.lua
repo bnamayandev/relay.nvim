@@ -52,7 +52,7 @@ local defaults = {
   --   "auto"   -> ref when the file is saved on disk, inline otherwise (unsaved, no file, deleted)
   format = "auto",
   -- Press Enter in the agent after pasting. When false the text waits in its prompt.
-  submit = false,
+  submit = true,
   -- Switch to the agent's pane after sending. "auto" focuses only when not submitting.
   focus = "auto",
   -- Empty the queue after it was delivered (restorable with :Relay restore).
