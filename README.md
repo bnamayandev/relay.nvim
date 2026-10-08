@@ -145,7 +145,7 @@ api-refactor  ~/code/api-wt-cache  [feat/cache]  ○ claude idle  tmux work:2.1
 󰆏  Copy to clipboard
 ```
 
-The agent opens in a terminal split on the left, in the current directory, and your message is delivered once it's ready, so you can keep working. It's a normal session that keeps running after the send. Once a session is open in Neovim, sending works as described above. To keep sending to a session outside Neovim without the picker, pin it.
+The agent opens in a narrow terminal split on the right (35% of the width), in the current directory, and your message is delivered once it's ready, so you can keep working. It's a normal session that keeps running after the send. Once a session is open in Neovim, sending works as described above. To keep sending to a session outside Neovim without the picker, pin it.
 
 Some agents show a startup screen first, like Claude's "trust this folder?" or Codex's update notice. Relay waits until you've answered it, since pressing Enter there would pick an option such as "No, exit". Claude Code reports when its prompt is up, so with `submit = true` Relay presses Enter for you. Codex and Copilot don't report this, so Relay waits for their output to settle and leaves the message in the prompt for you to press Enter the first time. If the agent exits before it's ready, the message goes to the clipboard.
 
@@ -183,7 +183,8 @@ require("relay").setup({
   claude_dir = nil,         -- default: $CLAUDE_CONFIG_DIR or ~/.claude
   agents = { claude = true, codex = true, copilot = true }, -- false: ignore that agent's sessions
   launch = {                -- offer to start an agent while none is open in Neovim (false: never)
-    split = "left",         -- "left" | "right" | "above" | "below" | "tab"
+    split = "right",        -- "right" | "left" | "above" | "below" | "tab"
+    size = 0.35,            -- fraction of the width (height for above/below), or columns/lines
     cmd = { claude = { "claude" }, codex = { "codex" }, copilot = { "copilot" } }, -- false: don't offer it
   },
   backends = { nvim = true, tmux = true, zellij = true, kitty = true, wezterm = true },

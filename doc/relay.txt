@@ -66,7 +66,8 @@ Defaults: >lua
       claude_dir = nil,
       agents = { claude = true, codex = true, copilot = true },
       launch = {
-        split = "left",
+        split = "right",
+        size = 0.35,
         cmd = { claude = { "claude" }, codex = { "codex" },
                 copilot = { "copilot" } },
       },
@@ -113,8 +114,10 @@ agents          Which agents' sessions to list: `claude`, `codex`,
                                                                *relay-launch*
 launch          Offer to start an agent while none is open in this Neovim
                 (see |relay-start|), or `false` to never offer it.
-                `split`: where its terminal opens, "left", "right", "above",
-                "below" or "tab". `cmd`: the command for each agent, a list or
+                `split`: where its terminal opens, "right", "left", "above",
+                "below" or "tab". `size`: the split's width (height for
+                "above"/"below"), a fraction of the editor or, when >= 1,
+                columns (lines). `cmd`: the command for each agent, a list or
                 a shell string; set one to `false` to not offer it, e.g.
                 `copilot = { "gh", "copilot" }` or `claude = false`.
 
@@ -228,9 +231,9 @@ kitty needs `allow_remote_control` and `listen_on` in kitty.conf.
 While no agent session is open in this Neovim, sending (and pinning, and
 jumping to a session) always asks, and the picker starts with the installed
 agents (see |relay-launch|); sessions running elsewhere follow them. The agent
-runs in a terminal split on the left, in the current directory, and the
-message is sent once it's ready. The session keeps running afterwards like any
-other. Pin a session outside Neovim to send there without the picker.
+runs in a narrow terminal split on the right, in the current directory, and
+the message is sent once it's ready. The session keeps running afterwards like
+any other. Pin a session outside Neovim to send there without the picker.
 
 Startup screens that wait for a key ("trust this folder?", Codex's update
 notice) are left for you to answer: Relay waits until they're gone, because

@@ -18,6 +18,7 @@ local QUIET = 400 -- ms without output that count as settled
 local NOISY = 3000 -- ms after bracketed paste went on: output that never settles (a spinner) is fine
 local CLAUDE_GRACE = 5000 -- ms to wait for Claude's registry entry (older versions write none)
 local TIMEOUT = 60000
+local MIN_WIDTH = 50 -- agents' prompts get cramped below this (unless that's over half the editor)
 
 -- the footer of a startup screen that waits for a key (lowercase)
 local PROMPTS = { "enter to continue", "enter to confirm", "enter to select" }
@@ -55,6 +56,35 @@ function M.available()
     end
   end
   return out
+end
+
+--- Open the window for the agent's terminal (and enter it).
+---@param buf integer
+local function open_window(buf, launch)
+  if launch.split == "tab" then
+    vim.cmd("tab sbuffer " .. buf)
+    return vim.api.nvim_get_current_win()
+  end
+  local split = launch.split or "right"
+  local vertical = split == "left" or split == "right"
+  local total = vertical and vim.o.columns or (vim.o.lines - vim.o.cmdheight - 1)
+  local size = tonumber(launch.size) or 0
+  if size <= 0 then
+    size = 0.35
+  end
+  size = size < 1 and math.floor(total * size) or math.floor(size)
+  if vertical then
+    size = math.max(size, math.min(MIN_WIDTH, math.floor(total / 2)))
+  end
+  local win = vim.api.nvim_open_win(buf, true, {
+    split = split,
+    win = -1,
+    width = vertical and size or nil,
+    height = not vertical and size or nil,
+  })
+  -- keep its size when other windows open or close
+  vim.wo[win][vertical and "winfixwidth" or "winfixheight"] = true
+  return win
 end
 
 --- Whether the bottom of the terminal shows a screen that waits for a key.
@@ -102,12 +132,7 @@ function M.start(agent, opts, cb)
   local cwd = vim.fn.getcwd()
   local origin = vim.api.nvim_get_current_win()
   local buf = vim.api.nvim_create_buf(true, false)
-  if launch.split == "tab" then
-    vim.cmd("tab sbuffer " .. buf)
-  else
-    vim.api.nvim_open_win(buf, true, { split = launch.split or "left", win = -1 })
-  end
-  local win = vim.api.nvim_get_current_win()
+  local win = open_window(buf, launch)
 
   local term = { paste_at = nil, output = vim.uv.now(), tail = "", exited = nil }
   local job = {

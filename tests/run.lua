@@ -921,7 +921,8 @@ else
       eq("\27[200~explain\n\n@l1.lua#L2\27[201~\r", util.read_file(log))
       eq(0, queue.count())
       eq("terminal", vim.bo.buftype, "the new session is focused")
-      eq(1, vim.fn.winnr(), "it opened on the far left")
+      eq(vim.fn.winnr("$"), vim.fn.winnr(), "it opened on the far right")
+      eq(math.max(math.floor(vim.o.columns * 0.35), math.min(50, math.floor(vim.o.columns / 2))), vim.fn.winwidth(0))
     end)
     vim.env.FAKE_REGISTRY = nil
   end)

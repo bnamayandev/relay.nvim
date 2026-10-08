@@ -13,7 +13,8 @@ local M = {}
 ---@field sessions string|false normal: jump to a running agent session
 
 ---@class relay.Launch
----@field split "left"|"right"|"above"|"below"|"tab"  where the agent's terminal opens
+---@field split "right"|"left"|"above"|"below"|"tab"  where the agent's terminal opens
+---@field size number   width (or height) of the split: a fraction of the editor, or columns/lines
 ---@field cmd table<string, string|string[]|false>   command per agent; false: don't offer it
 
 ---@class relay.Config
@@ -69,7 +70,8 @@ local defaults = {
   -- While no session is open in this Neovim, the picker also offers to start one of the
   -- installed agents in a Neovim terminal; the message goes to it once it's ready. false: never.
   launch = {
-    split = "left", -- "left" | "right" | "above" | "below" | "tab"
+    split = "right", -- "right" | "left" | "above" | "below" | "tab"
+    size = 0.35, -- of the editor's width (height for above/below); >= 1: columns (lines)
     cmd = { claude = { "claude" }, codex = { "codex" }, copilot = { "copilot" } },
   },
   -- Where sessions can be reached. Disable a backend to ignore sessions hosted by it.
@@ -105,10 +107,10 @@ function M.setup(opts)
   end
   if M.options.launch and not SPLITS[M.options.launch.split] then
     vim.notify(
-      ("relay.nvim: invalid launch.split %q, using \"left\""):format(tostring(M.options.launch.split)),
+      ("relay.nvim: invalid launch.split %q, using \"right\""):format(tostring(M.options.launch.split)),
       vim.log.levels.WARN
     )
-    M.options.launch.split = "left"
+    M.options.launch.split = "right"
   end
   return M.options
 end
